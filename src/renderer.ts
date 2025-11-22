@@ -12,6 +12,7 @@ import {
   calculateLevel,
   getXPToNextLevel
 } from './gamification';
+import { cloudSync, CloudSyncConfig } from './cloudSync';
 
 declare global {
   interface Window {
@@ -81,7 +82,13 @@ let dailyGoal = 5000;
 let weeklyGoal = 35000;
 
 // Current view state
-let currentView: 'today' | 'week' | 'month' | 'year' | 'insights' | 'achievements' | 'challenges' | 'goals' = 'today';
+let currentView: 'today' | 'week' | 'month' | 'year' | 'insights' | 'achievements' | 'challenges' | 'goals' | 'settings' = 'today';
+
+// Cloud sync state
+let cloudSyncEnabled = false;
+let cloudSyncConfig: CloudSyncConfig = { enabled: false };
+let isSignedIn = false;
+let currentUser: any = null;
 
 // Format large numbers
 function formatNumber(num: number): string {
@@ -152,6 +159,7 @@ function createDashboard() {
           <button class="tab-button" data-view="achievements">🏆 Achievements</button>
           <button class="tab-button" data-view="challenges">🎯 Challenges</button>
           <button class="tab-button" data-view="goals">📋 Goals</button>
+          <button class="tab-button" data-view="settings">⚙️ Settings</button>
         </div>
 
         <div class="tab-content" id="analytics-content">
@@ -235,6 +243,9 @@ function renderAnalytics() {
         break;
       case 'goals':
         renderGoalsView(contentEl);
+        break;
+      case 'settings':
+        contentEl.innerHTML = renderSettingsView();
         break;
     }
   } catch (error) {
@@ -838,6 +849,593 @@ function updateAchievements() {
   `).join('');
 }
 
+// Render settings view
+function renderSettingsView(): string {
+  return `
+    <div class="settings-container">
+      <div class="settings-header">
+        <h3>⚙️ Settings</h3>
+        <p>Manage your TypeCount preferences and cloud sync</p>
+      </div>
+
+      <!-- Cloud Sync Section -->
+      <div class="settings-section">
+        <div class="section-header">
+          <h4>☁️ Cloud Sync</h4>
+          <p class="section-description">Sync your typing data across devices (optional)</p>
+        </div>
+
+        <div class="cloud-sync-status">
+          <div class="sync-status-indicator ${isSignedIn ? 'connected' : 'disconnected'}">
+            <span class="status-dot"></span>
+            <span class="status-text">
+              ${isSignedIn ? `✅ Connected as ${currentUser?.email || 'User'}` : '⚪ Not connected'}
+            </span>
+          </div>
+        </div>
+
+        ${!isSignedIn ? `
+          <div class="auth-section">
+            <div class="auth-tabs">
+              <button class="auth-tab active" onclick="showAuthTab('signin')">Sign In</button>
+              <button class="auth-tab" onclick="showAuthTab('signup')">Create Account</button>
+            </div>
+
+            <form id="auth-form" class="auth-form" onsubmit="handleAuth(event)">
+              <div class="form-group">
+                <label for="auth-email">Email:</label>
+                <input type="email" id="auth-email" required placeholder="your@email.com">
+              </div>
+              <div class="form-group">
+                <label for="auth-password">Password:</label>
+                <input type="password" id="auth-password" required placeholder="Password (min 6 chars)">
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="auth-submit-btn" id="auth-submit">
+                  <span class="btn-text">Sign In</span>
+                  <span class="btn-loading hidden">⏳ Please wait...</span>
+                </button>
+              </div>
+              <input type="hidden" id="auth-mode" value="signin">
+            </form>
+
+            <div class="privacy-notice">
+              <p><strong>Privacy First:</strong> Your typing data is encrypted and only accessible by you.
+              Cloud sync is completely optional and you can disable it anytime.</p>
+            </div>
+          </div>
+        ` : `
+          <div class="sync-controls">
+            <div class="sync-settings">
+              <label class="setting-item">
+                <input type="checkbox" ${cloudSyncEnabled ? 'checked' : ''} onchange="toggleCloudSync(this.checked)">
+                <span class="checkmark"></span>
+                <span class="setting-label">Enable automatic cloud sync</span>
+              </label>
+
+              <div class="sync-frequency">
+                <label for="sync-interval">Sync frequency:</label>
+                <select id="sync-interval" onchange="updateSyncInterval(this.value)">
+                  <option value="1" ${cloudSyncConfig.syncInterval === 1 ? 'selected' : ''}>Every hour</option>
+                  <option value="6" ${cloudSyncConfig.syncInterval === 6 ? 'selected' : ''}>Every 6 hours</option>
+                  <option value="24" ${cloudSyncConfig.syncInterval === 24 ? 'selected' : ''}>Daily</option>
+                  <option value="168" ${cloudSyncConfig.syncInterval === 168 ? 'selected' : ''}>Weekly</option>
+                </select>
+              </div>
+
+              <div class="sync-actions">
+                <button class="sync-btn" onclick="manualSync()">🔄 Sync Now</button>
+                <button class="backup-btn" onclick="backupData()">💾 Backup Data</button>
+                <button class="restore-btn" onclick="showRestoreModal()">📥 Restore Data</button>
+              </div>
+
+              ${cloudSyncConfig.lastSync ? `
+                <div class="sync-info">
+                  <p class="last-sync">Last sync: ${new Date(cloudSyncConfig.lastSync).toLocaleString()}</p>
+                </div>
+              ` : ''}
+            </div>
+
+            <div class="account-actions">
+              <button class="sign-out-btn" onclick="signOut()">Sign Out</button>
+            </div>
+          </div>
+        `}
+      </div>
+
+      <!-- Data Management Section -->
+      <div class="settings-section">
+        <div class="section-header">
+          <h4>📊 Data Management</h4>
+          <p class="section-description">Export or reset your typing data</p>
+        </div>
+
+        <div class="data-actions">
+          <button class="export-btn" onclick="handleExportCSV()">📄 Export CSV</button>
+          <button class="export-btn" onclick="handleExportJSON()">📄 Export JSON</button>
+          <button class="reset-btn" onclick="showResetDataModal()">🗑️ Reset All Data</button>
+        </div>
+
+        <div class="data-info">
+          <div class="data-stat">
+            <span class="stat-label">Total keystrokes:</span>
+            <span class="stat-value">${formatNumber(totalKeystrokes)}</span>
+          </div>
+          <div class="data-stat">
+            <span class="stat-label">Days tracked:</span>
+            <span class="stat-value">${Object.keys(dailyData).length}</span>
+          </div>
+          <div class="data-stat">
+            <span class="stat-label">First used:</span>
+            <span class="stat-value">${firstUsedDate ? new Date(firstUsedDate).toLocaleDateString() : 'Unknown'}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Data Reset Confirmation Modal -->
+      <div id="resetDataModal" class="modal hidden">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h4>⚠️ Reset All Data</h4>
+            <button class="close-btn" onclick="hideResetDataModal()">&times;</button>
+          </div>
+          <div class="modal-body">
+            <p><strong>This action cannot be undone!</strong></p>
+            <p>This will permanently delete all your typing data including:</p>
+            <ul>
+              <li>All keystroke counts</li>
+              <li>Achievement progress</li>
+              <li>Goals and challenges</li>
+              <li>Historical data</li>
+            </ul>
+            <p>Make sure you have exported your data if you want to keep a backup.</p>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="cancel-btn" onclick="hideResetDataModal()">Cancel</button>
+            <button type="button" class="reset-confirm-btn" onclick="confirmResetData()">Reset All Data</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// Cloud sync authentication functions
+async function showAuthTab(mode: 'signin' | 'signup') {
+  const signinTab = document.querySelector('.auth-tab:first-child') as HTMLElement;
+  const signupTab = document.querySelector('.auth-tab:last-child') as HTMLElement;
+  const submitBtn = document.getElementById('auth-submit') as HTMLElement;
+  const authMode = document.getElementById('auth-mode') as HTMLInputElement;
+
+  if (!signinTab || !signupTab || !submitBtn || !authMode) return;
+
+  // Update tab states
+  signinTab.classList.toggle('active', mode === 'signin');
+  signupTab.classList.toggle('active', mode === 'signup');
+
+  // Update button text
+  const btnText = submitBtn.querySelector('.btn-text');
+  if (btnText) {
+    btnText.textContent = mode === 'signin' ? 'Sign In' : 'Create Account';
+  }
+
+  // Update hidden mode
+  authMode.value = mode;
+}
+
+async function handleAuth(event: Event) {
+  event.preventDefault();
+
+  const form = event.target as HTMLFormElement;
+  const formData = new FormData(form);
+  const email = formData.get('auth-email') as string;
+  const password = formData.get('auth-password') as string;
+  const mode = formData.get('auth-mode') as string;
+
+  if (!email || !password) {
+    showNotification('Please fill in all fields');
+    return;
+  }
+
+  const submitBtn = document.getElementById('auth-submit');
+  const btnText = submitBtn?.querySelector('.btn-text') as HTMLElement;
+  const btnLoading = submitBtn?.querySelector('.btn-loading') as HTMLElement;
+
+  try {
+    // Show loading state
+    if (btnText && btnLoading) {
+      btnText.classList.add('hidden');
+      btnLoading.classList.remove('hidden');
+    }
+
+    // Initialize cloud sync with dummy config for demo
+    const success = await cloudSync.initialize({
+      enabled: true,
+      supabaseUrl: 'https://your-project.supabase.co', // Replace with actual URL
+      supabaseKey: 'your-anon-key', // Replace with actual key
+      autoSync: true,
+      syncInterval: 24
+    });
+
+    if (!success) {
+      throw new Error('Failed to initialize cloud sync');
+    }
+
+    // Attempt authentication
+    const result = mode === 'signin'
+      ? await cloudSync.signIn(email, password)
+      : await cloudSync.signUp(email, password);
+
+    if (result.error) {
+      throw new Error(result.error.message || 'Authentication failed');
+    }
+
+    if (result.user) {
+      currentUser = result.user;
+      isSignedIn = true;
+      cloudSyncEnabled = true;
+
+      showNotification(`✅ Successfully ${mode === 'signin' ? 'signed in' : 'created account'}!`);
+
+      // Refresh settings view
+      if (currentView === 'settings') {
+        renderAnalytics();
+      }
+
+      // Trigger initial sync
+      setTimeout(() => manualSync(), 1000);
+    }
+  } catch (error: any) {
+    console.error('Authentication error:', error);
+    showNotification(`❌ ${error.message || 'Authentication failed'}`);
+  } finally {
+    // Reset loading state
+    if (btnText && btnLoading) {
+      btnText.classList.remove('hidden');
+      btnLoading.classList.add('hidden');
+    }
+  }
+}
+
+async function signOut() {
+  try {
+    await cloudSync.signOut();
+    currentUser = null;
+    isSignedIn = false;
+    cloudSyncEnabled = false;
+
+    showNotification('✅ Signed out successfully');
+
+    // Refresh settings view
+    if (currentView === 'settings') {
+      renderAnalytics();
+    }
+  } catch (error: any) {
+    console.error('Sign out error:', error);
+    showNotification('❌ Failed to sign out');
+  }
+}
+
+// Cloud backup and sync functions
+async function backupData() {
+  if (!cloudSync.isEnabled() || !cloudSync.isAuthenticated()) {
+    showNotification('❌ Cloud sync not available');
+    return;
+  }
+
+  try {
+    showNotification('⏳ Backing up data...');
+
+    const localData = {
+      totalKeystrokes,
+      dailyKeystrokes: dailyData,
+      hourlyKeystrokes: hourlyData,
+      achievements,
+      challenges,
+      goals,
+      userLevel,
+      userXP,
+      personalityType,
+      streakDays,
+      firstUsedDate
+    };
+
+    const result = await cloudSync.backupData(localData);
+
+    if (result.success) {
+      showNotification('✅ Data backed up successfully!');
+
+      // Update last sync time in UI
+      cloudSyncConfig.lastSync = new Date().toISOString();
+      if (currentView === 'settings') {
+        renderAnalytics();
+      }
+    } else {
+      throw new Error(result.error || 'Backup failed');
+    }
+  } catch (error: any) {
+    console.error('Backup error:', error);
+    showNotification(`❌ Backup failed: ${error.message}`);
+  }
+}
+
+async function manualSync() {
+  if (!cloudSync.isEnabled() || !cloudSync.isAuthenticated()) {
+    showNotification('❌ Cloud sync not available');
+    return;
+  }
+
+  try {
+    showNotification('⏳ Syncing data...');
+
+    const localData = {
+      totalKeystrokes,
+      dailyKeystrokes: dailyData,
+      hourlyKeystrokes: hourlyData,
+      achievements,
+      challenges,
+      goals,
+      userLevel,
+      userXP,
+      personalityType,
+      streakDays,
+      firstUsedDate
+    };
+
+    const result = await cloudSync.syncData(localData);
+
+    if (result.success && result.mergedData) {
+      // Update local state with merged data
+      totalKeystrokes = result.mergedData.totalKeystrokes || totalKeystrokes;
+      dailyData = result.mergedData.dailyKeystrokes || dailyData;
+      hourlyData = result.mergedData.hourlyKeystrokes || hourlyData;
+      achievements = result.mergedData.achievements || achievements;
+      userLevel = result.mergedData.userLevel || userLevel;
+      userXP = result.mergedData.userXP || userXP;
+      personalityType = result.mergedData.personalityType || personalityType;
+      streakDays = result.mergedData.streakDays || streakDays;
+      firstUsedDate = result.mergedData.firstUsedDate || firstUsedDate;
+
+      // Update UI
+      updateUI();
+
+      showNotification('✅ Data synced successfully!');
+
+      // Update last sync time in UI
+      cloudSyncConfig.lastSync = new Date().toISOString();
+      if (currentView === 'settings') {
+        renderAnalytics();
+      }
+    } else {
+      throw new Error(result.error || 'Sync failed');
+    }
+  } catch (error: any) {
+    console.error('Sync error:', error);
+    showNotification(`❌ Sync failed: ${error.message}`);
+  }
+}
+
+async function restoreFromCloud() {
+  if (!cloudSync.isEnabled() || !cloudSync.isAuthenticated()) {
+    showNotification('❌ Cloud sync not available');
+    return;
+  }
+
+  try {
+    showNotification('⏳ Restoring data from cloud...');
+
+    const result = await cloudSync.restoreData();
+
+    if (result.success && result.data) {
+      const cloudDataArray = result.data;
+
+      if (cloudDataArray.length === 0) {
+        showNotification('ℹ️ No cloud data found');
+        return;
+      }
+
+      // Show restore confirmation modal with device selection
+      showRestoreModal(cloudDataArray);
+    } else {
+      throw new Error(result.error || 'Restore failed');
+    }
+  } catch (error: any) {
+    console.error('Restore error:', error);
+    showNotification(`❌ Restore failed: ${error.message}`);
+  }
+}
+
+function showRestoreModal(cloudDataArray: any[] = []) {
+  // Create restore modal dynamically
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.id = 'restoreModal';
+
+  modal.innerHTML = `
+    <div class="modal-content">
+      <div class="modal-header">
+        <h4>📥 Restore Data</h4>
+        <button class="close-btn" onclick="hideRestoreModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        ${cloudDataArray.length > 0 ? `
+          <p>Select which device data to restore from:</p>
+          <div class="device-list">
+            ${cloudDataArray.map((deviceData, index) => `
+              <div class="device-item">
+                <input type="radio" id="device-${index}" name="restore-device" value="${index}">
+                <label for="device-${index}">
+                  <div class="device-info">
+                    <div class="device-name">${deviceData.device_name || 'Unknown Device'}</div>
+                    <div class="device-stats">
+                      ${formatNumber(deviceData.total_keystrokes || 0)} keystrokes
+                    </div>
+                    <div class="device-date">
+                      Last updated: ${new Date(deviceData.last_updated).toLocaleString()}
+                    </div>
+                  </div>
+                </label>
+              </div>
+            `).join('')}
+          </div>
+        ` : `
+          <p>No cloud backup data found. Would you like to create your first backup?</p>
+        `}
+      </div>
+      <div class="form-actions">
+        <button type="button" class="cancel-btn" onclick="hideRestoreModal()">Cancel</button>
+        ${cloudDataArray.length > 0 ? `
+          <button type="button" class="restore-btn" onclick="confirmRestore()">Restore Selected</button>
+        ` : `
+          <button type="button" class="backup-btn" onclick="hideRestoreModal(); backupData();">Create Backup</button>
+        `}
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+}
+
+function hideRestoreModal() {
+  const modal = document.getElementById('restoreModal');
+  if (modal) {
+    modal.remove();
+  }
+}
+
+async function confirmRestore() {
+  const selectedDevice = document.querySelector('input[name="restore-device"]:checked') as HTMLInputElement;
+
+  if (!selectedDevice) {
+    showNotification('Please select a device to restore from');
+    return;
+  }
+
+  try {
+    const result = await cloudSync.restoreData();
+    if (result.success && result.data) {
+      const deviceData = result.data[parseInt(selectedDevice.value)];
+
+      // Apply restored data
+      totalKeystrokes = deviceData.total_keystrokes || 0;
+      dailyData = deviceData.daily_keystrokes || {};
+      hourlyData = deviceData.hourly_keystrokes || {};
+      achievements = deviceData.achievements || [];
+      userLevel = deviceData.user_level || 1;
+      userXP = deviceData.user_xp || 0;
+      personalityType = deviceData.personality_type || '';
+      streakDays = deviceData.streak_days || 0;
+      firstUsedDate = deviceData.first_used_date || new Date().toISOString();
+
+      // Update UI
+      updateUI();
+
+      hideRestoreModal();
+      showNotification('✅ Data restored successfully!');
+    }
+  } catch (error: any) {
+    console.error('Restore error:', error);
+    showNotification(`❌ Restore failed: ${error.message}`);
+  }
+}
+
+function toggleCloudSync(enabled: boolean) {
+  cloudSyncEnabled = enabled;
+  cloudSyncConfig.enabled = enabled;
+
+  if (enabled && cloudSync.shouldSync()) {
+    manualSync();
+  }
+
+  showNotification(enabled ? '✅ Cloud sync enabled' : '⚪ Cloud sync disabled');
+}
+
+function updateSyncInterval(hours: string) {
+  cloudSyncConfig.syncInterval = parseInt(hours);
+  cloudSync.updateConfig({ syncInterval: parseInt(hours) });
+
+  showNotification(`⏱️ Sync frequency updated to every ${hours} hour${hours === '1' ? '' : 's'}`);
+}
+
+function showResetDataModal() {
+  const modal = document.getElementById('resetDataModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+  }
+}
+
+function hideResetDataModal() {
+  const modal = document.getElementById('resetDataModal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+}
+
+async function confirmResetData() {
+  try {
+    // Reset all local data
+    totalKeystrokes = 0;
+    sessionKeystrokes = 0;
+    todayKeystrokes = 0;
+    streakDays = 0;
+    achievements = [];
+    challenges = [];
+    goals = [];
+    userLevel = 1;
+    userXP = 0;
+    personalityType = '';
+    dailyData = {};
+    hourlyData = {};
+    firstUsedDate = new Date().toISOString();
+
+    // Send reset command to main process
+    window.electronAPI.resetAllData?.();
+
+    // Update UI
+    updateUI();
+
+    hideResetDataModal();
+    showNotification('✅ All data has been reset');
+  } catch (error: any) {
+    console.error('Reset error:', error);
+    showNotification('❌ Failed to reset data');
+  }
+}
+
+function toggleAnalytics(enabled: boolean) {
+  // Store analytics preference
+  localStorage.setItem('typecount-analytics-enabled', enabled.toString());
+  showNotification(enabled ? '✅ Analytics sharing enabled' : '⚪ Analytics sharing disabled');
+}
+
+// Initialize cloud sync on app start
+async function initializeCloudSync() {
+  try {
+    // Check for existing cloud sync configuration
+    const storedConfig = localStorage.getItem('typecount-cloud-config');
+    if (storedConfig) {
+      cloudSyncConfig = JSON.parse(storedConfig);
+
+      if (cloudSyncConfig.enabled) {
+        const success = await cloudSync.initialize(cloudSyncConfig);
+
+        if (success) {
+          isSignedIn = cloudSync.isAuthenticated();
+          currentUser = cloudSync.getCurrentUser();
+          cloudSyncEnabled = cloudSyncConfig.enabled;
+
+          // Auto-sync if needed and enabled
+          if (cloudSyncEnabled && cloudSync.shouldSync()) {
+            setTimeout(() => manualSync(), 2000);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to initialize cloud sync:', error);
+  }
+}
+
 // Goal management functions
 function showCreateGoalModal() {
   const modal = document.getElementById('goalModal');
@@ -1054,6 +1652,9 @@ function celebrateAchievement(achievement: string) {
 
 // Initialize the app
 createDashboard();
+
+// Initialize cloud sync
+initializeCloudSync();
 
 // Listen for data updates from main process
 window.electronAPI.onKeystrokeUpdate((data) => {

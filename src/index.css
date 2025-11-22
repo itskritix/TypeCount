@@ -1435,6 +1435,507 @@ header h1 {
   }
 }
 
+/* Settings Styles */
+.settings-container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.settings-header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.settings-header h3 {
+  color: #333;
+  margin-bottom: 0.5rem;
+}
+
+.settings-header p {
+  color: #666;
+  font-size: 1.1rem;
+}
+
+.settings-section {
+  background: white;
+  border-radius: 1rem;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  border-left: 4px solid #667eea;
+}
+
+.section-header h4 {
+  color: #333;
+  margin: 0 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.section-description {
+  color: #666;
+  margin: 0 0 2rem 0;
+  font-size: 0.95rem;
+}
+
+/* Cloud Sync Status */
+.cloud-sync-status {
+  margin-bottom: 2rem;
+}
+
+.sync-status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  border: 2px solid;
+}
+
+.sync-status-indicator.connected {
+  background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+  border-color: #28a745;
+  color: #155724;
+}
+
+.sync-status-indicator.disconnected {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-color: #6c757d;
+  color: #495057;
+}
+
+.status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.status-text {
+  font-weight: 600;
+}
+
+/* Authentication */
+.auth-section {
+  margin-top: 1rem;
+}
+
+.auth-tabs {
+  display: flex;
+  margin-bottom: 2rem;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: #f8f9fa;
+}
+
+.auth-tab {
+  flex: 1;
+  padding: 0.75rem 1.5rem;
+  background: transparent;
+  border: none;
+  font-weight: 600;
+  color: #6c757d;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.auth-tab.active {
+  background: #667eea;
+  color: white;
+}
+
+.auth-form {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.auth-submit-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 2rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.auth-submit-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.btn-loading.hidden,
+.btn-text.hidden {
+  display: none;
+}
+
+.privacy-notice {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #e8f4f8 0%, #d1ecf1 100%);
+  border-radius: 0.75rem;
+  border-left: 4px solid #17a2b8;
+}
+
+.privacy-notice p {
+  margin: 0;
+  color: #0c5460;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+/* Sync Controls */
+.sync-controls {
+  margin-top: 1rem;
+}
+
+.sync-settings {
+  margin-bottom: 2rem;
+}
+
+.setting-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  cursor: pointer;
+}
+
+.setting-item input[type="checkbox"] {
+  display: none;
+}
+
+.checkmark {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #ddd;
+  border-radius: 4px;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.setting-item input[type="checkbox"]:checked + .checkmark {
+  background: #667eea;
+  border-color: #667eea;
+}
+
+.setting-item input[type="checkbox"]:checked + .checkmark::after {
+  content: '✓';
+  position: absolute;
+  top: -2px;
+  left: 3px;
+  color: white;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.setting-label {
+  color: #333;
+  font-weight: 500;
+}
+
+.sync-frequency {
+  margin: 1.5rem 0;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.sync-frequency label {
+  color: #333;
+  font-weight: 500;
+}
+
+.sync-frequency select {
+  padding: 0.5rem 1rem;
+  border: 2px solid #e0e7ff;
+  border-radius: 0.5rem;
+  background: white;
+  color: #333;
+}
+
+.sync-actions {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin: 2rem 0;
+}
+
+.sync-btn, .backup-btn, .restore-btn, .reset-btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.sync-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.backup-btn {
+  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+  color: white;
+}
+
+.restore-btn {
+  background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+  color: white;
+}
+
+.reset-btn {
+  background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+  color: white;
+}
+
+.sync-btn:hover, .backup-btn:hover, .restore-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.reset-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+}
+
+.sync-info {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 0.5rem;
+}
+
+.last-sync {
+  margin: 0;
+  color: #6c757d;
+  font-size: 0.9rem;
+}
+
+.account-actions {
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 1px solid #e9ecef;
+}
+
+.sign-out-btn {
+  padding: 0.5rem 1.5rem;
+  background: #f8f9fa;
+  color: #6c757d;
+  border: 2px solid #dee2e6;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.sign-out-btn:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
+}
+
+/* Data Management */
+.data-actions {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 2rem;
+}
+
+.export-btn {
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.export-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.data-info {
+  background: #f8f9fa;
+  padding: 1.5rem;
+  border-radius: 0.75rem;
+}
+
+.data-stat {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.data-stat:last-child {
+  margin-bottom: 0;
+}
+
+.stat-label {
+  color: #6c757d;
+  font-weight: 500;
+}
+
+.stat-value {
+  color: #333;
+  font-weight: 600;
+}
+
+/* Device List for Restore */
+.device-list {
+  margin: 1.5rem 0;
+}
+
+.device-item {
+  margin-bottom: 1rem;
+}
+
+.device-item input[type="radio"] {
+  display: none;
+}
+
+.device-item label {
+  display: block;
+  padding: 1rem;
+  border: 2px solid #e9ecef;
+  border-radius: 0.75rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.device-item input[type="radio"]:checked + label {
+  border-color: #667eea;
+  background: linear-gradient(135deg, #f8f9ff 0%, #e8f0ff 100%);
+}
+
+.device-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.device-name {
+  font-weight: 600;
+  color: #333;
+}
+
+.device-stats {
+  color: #667eea;
+  font-weight: 500;
+}
+
+.device-date {
+  color: #6c757d;
+  font-size: 0.85rem;
+}
+
+.reset-confirm-btn {
+  background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.reset-confirm-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+}
+
+/* Dark mode for settings */
+@media (prefers-color-scheme: dark) {
+  .settings-section {
+    background: #2a2a2a;
+  }
+
+  .settings-header h3,
+  .section-header h4,
+  .setting-label,
+  .stat-label,
+  .stat-value,
+  .device-name {
+    color: white;
+  }
+
+  .settings-header p,
+  .section-description {
+    color: #ccc;
+  }
+
+  .sync-status-indicator.disconnected {
+    background: #3a3a3a;
+    border-color: #555;
+    color: #ccc;
+  }
+
+  .auth-tabs {
+    background: #3a3a3a;
+  }
+
+  .auth-tab {
+    color: #ccc;
+  }
+
+  .privacy-notice {
+    background: #2d3748;
+    border-color: #4299e1;
+  }
+
+  .privacy-notice p {
+    color: #a0aec0;
+  }
+
+  .sync-info,
+  .data-info {
+    background: #3a3a3a;
+  }
+
+  .last-sync {
+    color: #ccc;
+  }
+
+  .device-item label {
+    border-color: #555;
+    background: #3a3a3a;
+  }
+
+  .device-item input[type="radio"]:checked + label {
+    background: #2d2d3d;
+  }
+
+  .sign-out-btn {
+    background: #3a3a3a;
+    color: #ccc;
+    border-color: #555;
+  }
+
+  .sign-out-btn:hover {
+    background: #444;
+  }
+
+  .device-stats {
+    color: #667eea;
+  }
+
+  .device-date {
+    color: #888;
+  }
+}
+
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
   .achievements-header,
