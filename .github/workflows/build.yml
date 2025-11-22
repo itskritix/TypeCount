@@ -1,0 +1,155 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+        include:
+          - os: macos-latest
+            platform: darwin
+            arch: x64
+          - os: windows-latest
+            platform: win32
+            arch: x64
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Python (for node-gyp)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build native dependencies
+        run: npm rebuild
+
+      # macOS specific: code signing setup (optional)
+      - name: Setup macOS certificates
+        if: matrix.os == 'macos-latest' && env.APPLE_ID
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          CSC_LINK: ${{ secrets.MAC_CERTS }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
+        run: echo "Certificates configured"
+
+      # Windows specific: code signing setup (optional)
+      - name: Setup Windows certificates
+        if: matrix.os == 'windows-latest' && env.WINDOWS_CERTS
+        env:
+          WINDOWS_CERTS: ${{ secrets.WINDOWS_CERTS }}
+          WINDOWS_CERTS_PASSWORD: ${{ secrets.WINDOWS_CERTS_PASSWORD }}
+        run: echo "Certificates configured"
+
+      # Build the application
+      - name: Build Electron app
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run make
+
+      # Upload artifacts for each platform
+      - name: Upload macOS artifacts
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: typecount-macos
+          path: |
+            out/make/**/*.dmg
+            out/make/**/*.zip
+
+      - name: Upload Windows artifacts
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: typecount-windows
+          path: |
+            out/make/**/*.exe
+            out/make/**/*.msi
+
+      - name: Upload Linux artifacts
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: typecount-linux
+          path: |
+            out/make/**/*.deb
+            out/make/**/*.rpm
+            out/make/**/*.AppImage
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          draft: false
+          prerelease: false
+          files: |
+            typecount-macos/**/*
+            typecount-windows/**/*
+            typecount-linux/**/*
+          body: |
+            # TypeCount Release
+
+            ## Installation
+
+            ### macOS
+            - Download the `.dmg` file
+            - Open the DMG and drag TypeCount to Applications
+            - On first launch, grant accessibility permissions when prompted
+
+            ### Windows
+            - Download the `.exe` installer
+            - Run the installer
+            - TypeCount will start automatically
+
+            ### Linux
+            - Download the appropriate package for your distribution
+            - Install using your package manager
+
+            ## Features in this release
+            - Real-time keystroke tracking
+            - Achievement system
+            - Daily streaks
+            - Beautiful dashboard
+            - Auto-start on system boot
+            - Privacy-first design
+
+            ## Requirements
+            - macOS: Accessibility permissions required
+            - Windows: No special requirements
+            - Linux: X11 or Wayland support
+
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
