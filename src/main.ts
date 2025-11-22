@@ -417,7 +417,8 @@ const createWindow = () => {
       dailyData: store.get('dailyKeystrokes'),
       hourlyData: store.get('hourlyKeystrokes'),
       achievements: store.get('achievements'),
-      streak: store.get('streakDays')
+      streak: store.get('streakDays'),
+      firstUsedDate: store.get('firstUsedDate') || new Date().toISOString()
     });
   });
 };
@@ -431,7 +432,8 @@ ipcMain.on('request-data', (event) => {
     dailyData: store.get('dailyKeystrokes'),
     hourlyData: store.get('hourlyKeystrokes'),
     achievements: store.get('achievements'),
-    streak: store.get('streakDays')
+    streak: store.get('streakDays'),
+    firstUsedDate: store.get('firstUsedDate') || new Date().toISOString()
   });
 });
 
