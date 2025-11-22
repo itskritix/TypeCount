@@ -1,12 +1,6 @@
 import './index.css';
-import {
-  getWeeklyAnalytics,
-  getMonthlyAnalytics,
-  getYearlyAnalytics,
-  getProductivityInsights,
-  exportToCSV,
-  exportToJSON
-} from './analytics';
+// Analytics functions moved to gamification.ts or removed
+// import { getWeeklyAnalytics, getMonthlyAnalytics } from './gamification';
 import {
   ACHIEVEMENT_DEFINITIONS,
   calculateLevel,
@@ -23,6 +17,7 @@ declare global {
       onChallengeCompleted: (callback: (challenge: any) => void) => void;
       requestData: () => void;
       createGoal: (goalData: any) => void;
+      sendManualKeystroke: () => void;
     };
   }
 }
@@ -160,6 +155,7 @@ function createDashboard() {
           <button class="tab-button" data-view="challenges">🎯 Challenges</button>
           <button class="tab-button" data-view="goals">📋 Goals</button>
           <button class="tab-button" data-view="settings">⚙️ Settings</button>
+          <button class="tab-button test-button" onclick="testKeystroke()">🧪 Test</button>
         </div>
 
         <div class="tab-content" id="analytics-content">
@@ -1707,3 +1703,14 @@ window.electronAPI.onChallengeCompleted((challenge) => {
 
 // Request initial data on load
 window.electronAPI.requestData();
+
+// Test function for manual keystroke simulation
+function testKeystroke() {
+  if (window.electronAPI.sendManualKeystroke) {
+    window.electronAPI.sendManualKeystroke();
+    console.log('Test keystroke sent!');
+  }
+}
+
+// Make the function globally available
+(window as any).testKeystroke = testKeystroke;

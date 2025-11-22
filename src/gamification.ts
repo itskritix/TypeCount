@@ -165,8 +165,23 @@ export function checkAchievements(
   hourlyData: Record<string, number[]>,
   currentAchievements: Achievement[]
 ): Achievement[] {
+  // Defensive programming: ensure parameters are valid
+  if (typeof totalKeystrokes !== 'number' || totalKeystrokes < 0) {
+    console.warn('⚠️ Invalid totalKeystrokes for achievement check:', totalKeystrokes);
+    return [];
+  }
+
+  if (typeof streakDays !== 'number' || streakDays < 0) {
+    console.warn('⚠️ Invalid streakDays for achievement check:', streakDays);
+    return [];
+  }
+
+  // Ensure currentAchievements is always an array
+  const safeAchievements = Array.isArray(currentAchievements) ? currentAchievements : [];
+  const safeHourlyData = hourlyData && typeof hourlyData === 'object' ? hourlyData : {};
+
   const newAchievements: Achievement[] = [];
-  const unlockedIds = currentAchievements.map(a => a.id);
+  const unlockedIds = safeAchievements.map(a => a.id);
 
   for (const def of ACHIEVEMENT_DEFINITIONS) {
     if (unlockedIds.includes(def.id)) continue;
@@ -183,11 +198,11 @@ export function checkAchievements(
         break;
 
       case 'time':
-        shouldUnlock = checkTimeBasedAchievement(def.id, hourlyData);
+        shouldUnlock = checkTimeBasedAchievement(def.id, safeHourlyData);
         break;
 
       case 'special':
-        shouldUnlock = checkSpecialAchievement(def.id, totalKeystrokes, hourlyData);
+        shouldUnlock = checkSpecialAchievement(def.id, totalKeystrokes, safeHourlyData);
         break;
     }
 

@@ -906,12 +906,11 @@ export class OnboardingService {
             if (!checkbox) {
                 const checkboxContainer = document.createElement('div');
                 checkboxContainer.style.marginTop = '20px';
-                checkboxContainer.innerHTML = `
-                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                        <input type="checkbox" id="privacy-checkbox" style="transform: scale(1.2);">
-                        <span>I understand and agree to TypeCount's privacy practices</span>
-                    </label>
-                `;
+                checkboxContainer.innerHTML =
+                    '<label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">' +
+                        '<input type="checkbox" id="privacy-checkbox" style="transform: scale(1.2);">' +
+                        '<span>I understand and agree to TypeCount\'s privacy practices</span>' +
+                    '</label>';
                 content.appendChild(checkboxContainer);
 
                 checkbox = document.getElementById('privacy-checkbox');

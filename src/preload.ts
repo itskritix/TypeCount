@@ -23,5 +23,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   createGoal: (goalData: any) => {
     ipcRenderer.send('create-goal', goalData);
+  },
+  sendManualKeystroke: () => {
+    ipcRenderer.send('manual-keystroke');
   }
 });

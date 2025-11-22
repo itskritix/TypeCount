@@ -9,7 +9,10 @@
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
-    "lint": "eslint --ext .ts,.tsx ."
+    "lint": "eslint --ext .ts,.tsx .",
+    "rebuild": "npx @electron/rebuild --version=39.2.3 --arch=arm64",
+    "rebuild:uiohook": "npx @electron/rebuild --version=39.2.3 --arch=arm64 --module-dir node_modules/uiohook-napi",
+    "postinstall": "npx @electron/rebuild --version=39.2.3 --arch=arm64"
   },
   "keywords": [],
   "author": {
@@ -27,6 +30,7 @@
     "@electron-forge/plugin-fuses": "^7.10.2",
     "@electron-forge/plugin-vite": "^7.10.2",
     "@electron/fuses": "^1.8.0",
+    "@electron/rebuild": "^4.0.1",
     "@types/electron-squirrel-startup": "^1.0.2",
     "@typescript-eslint/eslint-plugin": "^5.62.0",
     "@typescript-eslint/parser": "^5.62.0",

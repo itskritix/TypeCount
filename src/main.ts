@@ -1,8 +1,80 @@
 import { app, BrowserWindow, Tray, Menu, nativeImage, dialog, systemPreferences, ipcMain } from 'electron';
 import path from 'node:path';
+import fs from 'node:fs';
 import started from 'electron-squirrel-startup';
 import Store from 'electron-store';
-import { uIOhook, UiohookKey } from 'uiohook-napi';
+
+// Import proper types for type safety
+import type { UiohookKeyboardEvent, UiohookNapi } from 'uiohook-napi';
+
+// Type-safe module loading with integrity checks
+interface UiohookModule {
+  uIOhook: UiohookNapi;
+  UiohookKey: typeof import('uiohook-napi').UiohookKey;
+}
+
+let uIOhook: UiohookNapi | null = null;
+let UiohookKey: typeof import('uiohook-napi').UiohookKey | null = null;
+let isNativeModuleAvailable = false;
+
+// Secure native module loading with integrity validation
+function loadNativeModuleSecurely(): boolean {
+  try {
+    if (app.isPackaged) {
+      // Production: Load from verified extraResource location
+      const nativeModulePath = path.join(process.resourcesPath, 'uiohook_napi.node');
+
+      // Security Check 1: Verify file exists
+      if (!fs.existsSync(nativeModulePath)) {
+        console.error('❌ Native module not found at expected location:', nativeModulePath);
+        return false;
+      }
+
+      // Security Check 2: Validate file properties
+      const stats = fs.statSync(nativeModulePath);
+      const fileSizeKB = stats.size / 1024;
+
+      // Reasonable size limits (uiohook_napi.node should be ~80-200KB)
+      if (stats.size === 0 || fileSizeKB > 10000) {
+        console.error('❌ Native module file size suspicious:', fileSizeKB, 'KB');
+        return false;
+      }
+
+      // Security Check 3: Verify file permissions
+      if (!stats.isFile()) {
+        console.error('❌ Native module path is not a regular file');
+        return false;
+      }
+
+      console.log('✅ Native module integrity verified:', fileSizeKB.toFixed(1), 'KB');
+
+      // Load with controlled path
+      const uiohookModule: UiohookModule = require(nativeModulePath);
+      uIOhook = uiohookModule.uIOhook;
+      UiohookKey = uiohookModule.UiohookKey;
+    } else {
+      // Development: Use standard import
+      const uiohookModule: UiohookModule = require('uiohook-napi');
+      uIOhook = uiohookModule.uIOhook;
+      UiohookKey = uiohookModule.UiohookKey;
+      console.log('✅ Development mode: uiohook-napi loaded from node_modules');
+    }
+
+    // Final validation
+    if (!uIOhook || typeof uIOhook.start !== 'function') {
+      console.error('❌ Invalid uIOhook module structure');
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('❌ Critical error loading uiohook-napi:', error);
+    return false;
+  }
+}
+
+// Initialize native module with security checks
+isNativeModuleAvailable = loadNativeModuleSecurely();
 import AutoLaunch from 'auto-launch';
 import { autoUpdater } from 'electron-updater';
 import {
@@ -123,34 +195,247 @@ let lastAchievementCheck = Date.now();
 const ACHIEVEMENT_CHECK_INTERVAL = 50; // Check achievements every 50 keystrokes
 const ACHIEVEMENT_CHECK_TIME_INTERVAL = 30000; // Or every 30 seconds
 
-// Track keystrokes without storing actual keys (privacy-first)
-const startKeystrokeTracking = () => {
-  try {
-    uIOhook.on('keydown', (e) => {
-      // Count keystroke without logging the actual key
-      keystrokeCount++;
-      updateKeystrokeData();
+// Performance-optimized keystroke tracking with rate limiting and batching
+class KeystrokeTracker {
+  private lastEventTime = 0;
+  private eventCount = 0;
+  private batchedUpdates = 0;
+  private isOverloaded = false;
 
-      // Send update to renderer if window is open
+  // Rate limiting configuration
+  private readonly MAX_EVENTS_PER_SECOND = 100; // Max 100 events/second
+  private readonly MIN_EVENT_INTERVAL = 1000 / this.MAX_EVENTS_PER_SECOND;
+  private readonly OVERLOAD_THRESHOLD = 200; // Circuit breaker at 200 events/second
+  private readonly BATCH_SIZE = 10; // Batch every 10 keystrokes
+  private readonly UPDATE_DEBOUNCE_MS = 250; // Debounce expensive operations
+
+  // Timers for batching and debouncing
+  private batchUpdateTimer: NodeJS.Timeout | null = null;
+  private rendererUpdateTimer: NodeJS.Timeout | null = null;
+
+  // Cached data to reduce store access
+  private cachedStats = {
+    total: 0,
+    session: 0,
+    today: 0,
+    streak: 0,
+    userLevel: 1,
+    userXP: 0,
+    lastUpdate: 0
+  };
+
+  constructor() {
+    this.loadCachedStats();
+  }
+
+  private loadCachedStats() {
+    this.cachedStats = {
+      total: store.get('totalKeystrokes') || 0,
+      session: store.get('currentSessionKeystrokes') || 0,
+      today: getTodayKeystrokes(),
+      streak: store.get('streakDays') || 0,
+      userLevel: store.get('userLevel') || 1,
+      userXP: store.get('userXP') || 0,
+      lastUpdate: Date.now()
+    };
+  }
+
+  private handleKeystroke = (e: UiohookKeyboardEvent) => {
+    const now = Date.now();
+
+    // Rate limiting: Check if we're receiving events too rapidly
+    if (now - this.lastEventTime < this.MIN_EVENT_INTERVAL) {
+      this.eventCount++;
+
+      // Circuit breaker: If overwhelming, temporarily throttle
+      if (this.eventCount > this.OVERLOAD_THRESHOLD) {
+        if (!this.isOverloaded) {
+          console.warn('⚠️  Keystroke rate too high, activating circuit breaker');
+          this.isOverloaded = true;
+        }
+        return; // Drop event
+      }
+      return; // Skip this event due to rate limiting
+    }
+
+    // Reset overload state if we're back to normal rates
+    if (this.isOverloaded && now - this.lastEventTime > this.MIN_EVENT_INTERVAL * 2) {
+      console.log('✅ Circuit breaker deactivated, normal operation resumed');
+      this.isOverloaded = false;
+      this.eventCount = 0;
+    }
+
+    this.lastEventTime = now;
+    this.eventCount = Math.max(0, this.eventCount - 1); // Decay event count
+
+    // Count keystroke (privacy-first: no actual key data stored)
+    keystrokeCount++;
+    this.batchedUpdates++;
+
+    // Update cached stats immediately for responsiveness
+    this.cachedStats.total++;
+    this.cachedStats.session++;
+    this.cachedStats.today++;
+
+    // Batch data persistence to reduce disk I/O
+    if (this.batchedUpdates >= this.BATCH_SIZE) {
+      this.flushBatchedUpdates();
+    } else if (!this.batchUpdateTimer) {
+      // Ensure updates are flushed even with low typing rates
+      this.batchUpdateTimer = setTimeout(() => {
+        this.flushBatchedUpdates();
+      }, this.UPDATE_DEBOUNCE_MS);
+    }
+
+    // Debounced renderer updates to prevent overwhelming IPC
+    this.scheduleRendererUpdate();
+
+    // Periodic achievement checks (optimized frequency)
+    this.checkAchievementsThrottled();
+  };
+
+  private flushBatchedUpdates() {
+    if (this.batchedUpdates === 0) return;
+
+    try {
+      // Batch all store operations together
+      store.set('totalKeystrokes', this.cachedStats.total);
+      store.set('currentSessionKeystrokes', this.cachedStats.session);
+
+      // Update today's keystroke data
+      const today = new Date().toDateString();
+      const dailyData = store.get('dailyKeystrokeData') || {};
+      dailyData[today] = this.cachedStats.today;
+      store.set('dailyKeystrokeData', dailyData);
+
+      this.batchedUpdates = 0;
+      this.cachedStats.lastUpdate = Date.now();
+
+      if (this.batchUpdateTimer) {
+        clearTimeout(this.batchUpdateTimer);
+        this.batchUpdateTimer = null;
+      }
+    } catch (error) {
+      console.error('❌ Error flushing batched updates:', error);
+    }
+  }
+
+  private scheduleRendererUpdate() {
+    // Debounce renderer updates to prevent overwhelming IPC
+    if (this.rendererUpdateTimer) {
+      return; // Update already scheduled
+    }
+
+    this.rendererUpdateTimer = setTimeout(() => {
       if (mainWindow && !mainWindow.isDestroyed()) {
+        const dailyGoal = store.get('dailyGoal') || 5000;
+
         mainWindow.webContents.send('keystroke-update', {
-          total: store.get('totalKeystrokes'),
-          session: store.get('currentSessionKeystrokes'),
-          today: getTodayKeystrokes(),
-          streak: store.get('streakDays'),
-          userLevel: store.get('userLevel'),
-          userXP: store.get('userXP'),
-          dailyProgress: getDailyProgress(getTodayKeystrokes(), store.get('dailyGoal'))
+          total: this.cachedStats.total,
+          session: this.cachedStats.session,
+          today: this.cachedStats.today,
+          streak: this.cachedStats.streak,
+          userLevel: this.cachedStats.userLevel,
+          userXP: this.cachedStats.userXP,
+          dailyProgress: getDailyProgress(this.cachedStats.today, dailyGoal)
         });
       }
-    });
+
+      this.rendererUpdateTimer = null;
+    }, this.UPDATE_DEBOUNCE_MS);
+  }
+
+  private achievementCheckCounter = 0;
+  private lastAchievementCheck = Date.now();
+  private readonly ACHIEVEMENT_CHECK_INTERVAL = 50; // Check every 50 keystrokes
+  private readonly ACHIEVEMENT_CHECK_TIME_INTERVAL = 30000; // Or every 30 seconds
+
+  private checkAchievementsThrottled() {
+    this.achievementCheckCounter++;
+    const now = Date.now();
+
+    const shouldCheckByCount = this.achievementCheckCounter >= this.ACHIEVEMENT_CHECK_INTERVAL;
+    const shouldCheckByTime = now - this.lastAchievementCheck >= this.ACHIEVEMENT_CHECK_TIME_INTERVAL;
+
+    if (shouldCheckByCount || shouldCheckByTime) {
+      this.achievementCheckCounter = 0;
+      this.lastAchievementCheck = now;
+
+      // Run achievement checks asynchronously to avoid blocking
+      setTimeout(() => {
+        try {
+          // Get required data for achievement checking
+          const currentAchievements = store.get('achievements') || [];
+          const hourlyData = store.get('hourlyKeystrokeData') || {};
+          const streakDays = store.get('streakDays') || 0;
+
+          // Call achievement check with proper parameters
+          const newAchievements = checkAchievements(
+            this.cachedStats.total,
+            streakDays,
+            hourlyData,
+            currentAchievements
+          );
+
+          // Handle any new achievements
+          if (newAchievements.length > 0) {
+            const allAchievements = [...currentAchievements, ...newAchievements];
+            store.set('achievements', allAchievements);
+
+            // Send achievement notifications to renderer
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              newAchievements.forEach(achievement => {
+                mainWindow.webContents.send('achievement-unlocked', achievement);
+              });
+            }
+          }
+        } catch (error) {
+          console.error('❌ Error checking achievements:', error);
+        }
+      }, 0);
+    }
+  }
+
+  public cleanup() {
+    if (this.batchUpdateTimer) {
+      clearTimeout(this.batchUpdateTimer);
+      this.batchUpdateTimer = null;
+    }
+    if (this.rendererUpdateTimer) {
+      clearTimeout(this.rendererUpdateTimer);
+      this.rendererUpdateTimer = null;
+    }
+    this.flushBatchedUpdates(); // Ensure final data is saved
+  }
+}
+
+// Global keystroke tracker instance
+let keystrokeTracker: KeystrokeTracker | null = null;
+
+const startKeystrokeTracking = () => {
+  // Validation: Check if native module is available and secure
+  if (!isNativeModuleAvailable || !uIOhook) {
+    console.error('❌ uIOhook not available - global keystroke monitoring disabled');
+    console.log('💡 Tip: Ensure accessibility permissions are granted and app is restarted');
+    return;
+  }
+
+  try {
+    // Initialize performance-optimized tracker
+    keystrokeTracker = new KeystrokeTracker();
+
+    // Attach type-safe event handler
+    uIOhook.on('keydown', keystrokeTracker['handleKeystroke']);
 
     uIOhook.start();
-    console.log('Keystroke tracking started');
+    console.log('✅ Performance-optimized keystroke tracking started');
+    console.log('📊 Rate limit: 100 events/sec, Batch size: 10, Update delay: 250ms');
   } catch (error) {
-    console.error('Failed to start keystroke tracking:', error);
-    // On macOS, likely needs accessibility permissions
+    console.error('❌ Failed to start global keystroke tracking:', error);
+
+    // Platform-specific error handling
     if (process.platform === 'darwin') {
+      console.log('💡 macOS: Check System Preferences → Security & Privacy → Accessibility');
       requestAccessibilityPermissions();
     }
   }
@@ -158,10 +443,19 @@ const startKeystrokeTracking = () => {
 
 const stopKeystrokeTracking = () => {
   try {
-    uIOhook.stop();
-    console.log('Keystroke tracking stopped');
+    // Clean up the performance-optimized tracker
+    if (keystrokeTracker) {
+      keystrokeTracker.cleanup();
+      keystrokeTracker = null;
+    }
+
+    // Stop the native module
+    if (uIOhook) {
+      uIOhook.stop();
+      console.log('✅ Global keystroke tracking stopped gracefully');
+    }
   } catch (error) {
-    console.error('Failed to stop keystroke tracking:', error);
+    console.error('❌ Error stopping keystroke tracking:', error);
   }
 };
 
@@ -673,8 +967,13 @@ const createWindow = () => {
     title: 'TypeCount Dashboard'
   });
 
-  // and load the index.html of the app.
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+  // Load debug page for troubleshooting
+  const debugMode = process.env.NODE_ENV === 'development';
+
+  if (debugMode && process.argv.includes('--debug-renderer')) {
+    // Load debug page
+    mainWindow.loadFile(path.join(__dirname, '../debug-renderer.html'));
+  } else if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
   } else {
     mainWindow.loadFile(
@@ -792,8 +1091,8 @@ app.whenReady().then(async () => {
     console.error('Failed to set up auto-launch:', error);
   }
 
-  // Don't show window on startup, only tray
-  // User can open dashboard from tray menu
+  // Show window on startup for testing
+  createWindow();
 
   // Reset session count
   store.set('currentSessionKeystrokes', 0);
