@@ -553,3 +553,951 @@ header h1 {
     color: #ff6b6b;
   }
 }
+
+/* Gamification Styles */
+
+/* Achievements */
+.achievements-container {
+  max-width: 100%;
+}
+
+.achievements-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.achievements-header h3 {
+  margin: 0;
+  color: #333;
+}
+
+.achievement-stats {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.stat-item strong {
+  font-size: 1.2rem;
+  color: #667eea;
+}
+
+.stat-item small {
+  opacity: 0.7;
+  font-size: 0.8rem;
+}
+
+.achievement-category {
+  margin-bottom: 3rem;
+}
+
+.achievement-category h4 {
+  color: #555;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.category-progress {
+  font-size: 0.9rem;
+  color: #888;
+  font-weight: normal;
+}
+
+.achievement-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+}
+
+.achievement-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: white;
+  border-radius: 0.75rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  border-left: 4px solid #667eea;
+}
+
+.achievement-card.unlocked {
+  background: linear-gradient(135deg, #f8f9ff 0%, #e8f0ff 100%);
+}
+
+.achievement-icon {
+  font-size: 2rem;
+  width: 60px;
+  text-align: center;
+}
+
+.achievement-details h5 {
+  margin: 0 0 0.5rem 0;
+  color: #333;
+  font-size: 1rem;
+}
+
+.achievement-details p {
+  margin: 0 0 0.5rem 0;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.achievement-details small {
+  color: #888;
+  font-size: 0.8rem;
+}
+
+/* Challenges */
+.challenges-container {
+  max-width: 100%;
+}
+
+.challenges-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.challenges-header h3 {
+  margin: 0;
+  color: #333;
+}
+
+.challenge-stats {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.challenge-section {
+  margin-bottom: 3rem;
+}
+
+.challenge-section h4 {
+  color: #555;
+  margin-bottom: 1.5rem;
+}
+
+.challenges-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1.5rem;
+}
+
+.challenge-card {
+  background: white;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+  border: 2px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.challenge-card.active {
+  border-color: #667eea;
+  background: linear-gradient(135deg, #f8f9ff 0%, #e8f0ff 100%);
+}
+
+.challenge-card.completed {
+  border-color: #4caf50;
+  background: linear-gradient(135deg, #f1f8e9 0%, #e8f5e8 100%);
+}
+
+.challenge-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+  gap: 1rem;
+}
+
+.challenge-header h5 {
+  margin: 0;
+  color: #333;
+  flex: 1;
+}
+
+.challenge-type {
+  padding: 0.25rem 0.75rem;
+  border-radius: 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.challenge-type.daily {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.challenge-type.weekly {
+  background: #f3e5f5;
+  color: #7b1fa2;
+}
+
+.challenge-card p {
+  color: #666;
+  margin: 0 0 1.5rem 0;
+  line-height: 1.5;
+}
+
+.challenge-progress {
+  margin-bottom: 1rem;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: #e0e7ff;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.progress-bar.large {
+  height: 12px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  font-size: 0.9rem;
+  color: #666;
+  font-weight: 600;
+}
+
+.challenge-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.time-left {
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.reward {
+  font-size: 0.85rem;
+  color: #667eea;
+  font-weight: 600;
+}
+
+.reward.earned {
+  color: #4caf50;
+}
+
+.challenge-completion {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.completion-text {
+  font-size: 0.85rem;
+  color: #4caf50;
+  font-weight: 600;
+}
+
+/* Goals */
+.goals-container {
+  max-width: 100%;
+}
+
+.goals-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.goals-header h3 {
+  margin: 0;
+  color: #333;
+}
+
+.goals-stats {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.create-goal-btn {
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.create-goal-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.create-goal-btn.primary {
+  padding: 0.75rem 2rem;
+  font-size: 1rem;
+}
+
+.goals-section {
+  margin-bottom: 3rem;
+}
+
+.goals-section h4 {
+  color: #555;
+  margin-bottom: 1.5rem;
+}
+
+.goals-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.goal-card {
+  background: white;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+  border-left: 4px solid #667eea;
+  transition: all 0.3s ease;
+}
+
+.goal-card.completed {
+  border-left-color: #4caf50;
+  background: linear-gradient(135deg, #f1f8e9 0%, #e8f5e8 100%);
+}
+
+.goal-card.overdue {
+  border-left-color: #ff5722;
+  background: linear-gradient(135deg, #fff3e0 0%, #ffeaa7 100%);
+}
+
+.goal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+  gap: 1rem;
+}
+
+.goal-header h5 {
+  margin: 0;
+  color: #333;
+  flex: 1;
+}
+
+.goal-type {
+  padding: 0.25rem 0.75rem;
+  border-radius: 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.goal-card p {
+  color: #666;
+  margin: 0 0 1.5rem 0;
+  line-height: 1.5;
+}
+
+.goal-progress {
+  margin-bottom: 1rem;
+}
+
+.progress-details {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.5rem;
+}
+
+.progress-percent {
+  font-weight: 600;
+  color: #667eea;
+}
+
+.goal-timeline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.timeline-label {
+  color: #666;
+}
+
+.target-date {
+  font-weight: 600;
+  color: #333;
+}
+
+.target-date.overdue {
+  color: #ff5722;
+}
+
+.goal-achievement {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.achievement-text {
+  color: #4caf50;
+  font-weight: 600;
+}
+
+.achievement-date {
+  font-size: 0.85rem;
+  color: #666;
+}
+
+/* Modal */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal.hidden {
+  display: none;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 1rem;
+  padding: 2rem;
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.modal-header h4 {
+  margin: 0;
+  color: #333;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #666;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.3s ease;
+}
+
+.close-btn:hover {
+  background: #f0f0f0;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #333;
+  font-weight: 600;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #e0e7ff;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  transition: border-color 0.3s ease;
+  box-sizing: border-box;
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.form-group textarea {
+  height: 80px;
+  resize: vertical;
+}
+
+.form-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 2rem;
+}
+
+.cancel-btn {
+  padding: 0.75rem 1.5rem;
+  background: #f5f5f5;
+  color: #333;
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.cancel-btn:hover {
+  background: #e0e0e0;
+}
+
+.create-btn {
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.create-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #666;
+}
+
+.empty-state h4 {
+  color: #333;
+  margin-bottom: 1rem;
+}
+
+.empty-state p {
+  margin-bottom: 2rem;
+  line-height: 1.6;
+}
+
+/* Dark Mode for Gamification */
+@media (prefers-color-scheme: dark) {
+  .achievements-header h3,
+  .challenges-header h3,
+  .goals-header h3 {
+    color: white;
+  }
+
+  .achievement-category h4,
+  .challenge-section h4,
+  .goals-section h4 {
+    color: #ccc;
+  }
+
+  .achievement-card,
+  .challenge-card,
+  .goal-card {
+    background: #3a3a3a;
+    color: white;
+  }
+
+  .achievement-card.unlocked {
+    background: #2d2d3d;
+  }
+
+  .challenge-card.active {
+    background: #2d2d3d;
+    border-color: #667eea;
+  }
+
+  .challenge-card.completed {
+    background: #2d3a2d;
+    border-color: #4caf50;
+  }
+
+  .goal-card.completed {
+    background: #2d3a2d;
+  }
+
+  .goal-card.overdue {
+    background: #3d2d2d;
+  }
+
+  .achievement-details h5,
+  .challenge-header h5,
+  .goal-header h5 {
+    color: white;
+  }
+
+  .achievement-details p,
+  .challenge-card p,
+  .goal-card p {
+    color: #ccc;
+  }
+
+  .progress-bar {
+    background: #555;
+  }
+
+  .modal-content {
+    background: #2a2a2a;
+    color: white;
+  }
+
+  .modal-header h4 {
+    color: white;
+  }
+
+  .close-btn {
+    color: #ccc;
+  }
+
+  .close-btn:hover {
+    background: #444;
+  }
+
+  .form-group label {
+    color: white;
+  }
+
+  .form-group input,
+  .form-group textarea,
+  .form-group select {
+    background: #3a3a3a;
+    color: white;
+    border-color: #555;
+  }
+
+  .form-group input:focus,
+  .form-group textarea:focus,
+  .form-group select:focus {
+    border-color: #667eea;
+  }
+
+  .cancel-btn {
+    background: #555;
+    color: white;
+  }
+
+  .cancel-btn:hover {
+    background: #666;
+  }
+
+  .empty-state {
+    color: #ccc;
+  }
+
+  .empty-state h4 {
+    color: white;
+  }
+}
+
+/* Celebration Animations */
+.celebration-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+  animation: fadeIn 0.3s ease-in;
+}
+
+.celebration-overlay.fade-out {
+  animation: fadeOut 0.3s ease-out forwards;
+}
+
+.celebration {
+  background: white;
+  border-radius: 1.5rem;
+  padding: 3rem 2rem;
+  text-align: center;
+  max-width: 500px;
+  width: 90%;
+  position: relative;
+  animation: celebrationBounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.celebration-achievement {
+  border: 4px solid #ffd700;
+}
+
+.celebration-challenge {
+  border: 4px solid #4ecdc4;
+}
+
+.celebration-levelup {
+  border: 4px solid #ff6b6b;
+}
+
+.celebration-content {
+  position: relative;
+  z-index: 10;
+}
+
+.celebration-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  animation: iconSpin 0.8s ease-in-out;
+}
+
+.celebration-title {
+  color: #333;
+  margin: 0 0 1rem 0;
+  font-size: 2rem;
+  font-weight: bold;
+  animation: textSlideUp 0.6s ease-out 0.2s both;
+}
+
+.celebration-description {
+  color: #666;
+  margin: 0 0 2rem 0;
+  font-size: 1.2rem;
+  animation: textSlideUp 0.6s ease-out 0.4s both;
+}
+
+.celebration-close {
+  padding: 0.75rem 2rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 2rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  animation: textSlideUp 0.6s ease-out 0.6s both;
+}
+
+.celebration-close:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+}
+
+/* Confetti Animation */
+.confetti-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.confetti-piece {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: #ff6b6b;
+  animation: confettiFall 3s infinite linear;
+  transform-origin: center center;
+}
+
+.confetti-piece:nth-child(2n) {
+  width: 8px;
+  height: 12px;
+  animation-duration: 2.5s;
+}
+
+.confetti-piece:nth-child(3n) {
+  width: 6px;
+  height: 8px;
+  animation-duration: 3.5s;
+}
+
+/* Keyframe Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes celebrationBounce {
+  0% {
+    transform: scale(0.3) translateY(100px);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1) translateY(-20px);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes iconSpin {
+  0% { transform: rotateY(0deg) scale(0.5); }
+  50% { transform: rotateY(180deg) scale(1.2); }
+  100% { transform: rotateY(360deg) scale(1); }
+}
+
+@keyframes textSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes confettiFall {
+  0% {
+    transform: translateY(-100vh) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+/* Dark mode for celebrations */
+@media (prefers-color-scheme: dark) {
+  .celebration {
+    background: #2a2a2a;
+    color: white;
+  }
+
+  .celebration-title {
+    color: white;
+  }
+
+  .celebration-description {
+    color: #ccc;
+  }
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+  .achievements-header,
+  .challenges-header,
+  .goals-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .achievement-stats,
+  .challenge-stats,
+  .goals-stats {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .achievement-grid,
+  .challenges-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .challenge-header,
+  .goal-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .challenge-footer,
+  .challenge-completion,
+  .goal-achievement {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .progress-details {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .modal-content {
+    padding: 1.5rem;
+    margin: 1rem;
+  }
+
+  .celebration {
+    padding: 2rem 1.5rem;
+    margin: 1rem;
+  }
+
+  .celebration-title {
+    font-size: 1.5rem;
+  }
+
+  .celebration-description {
+    font-size: 1rem;
+  }
+
+  .celebration-icon {
+    font-size: 3rem;
+  }
+}

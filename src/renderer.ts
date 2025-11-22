@@ -7,6 +7,11 @@ import {
   exportToCSV,
   exportToJSON
 } from './analytics';
+import {
+  ACHIEVEMENT_DEFINITIONS,
+  calculateLevel,
+  getXPToNextLevel
+} from './gamification';
 
 declare global {
   interface Window {
@@ -14,9 +19,46 @@ declare global {
       onKeystrokeUpdate: (callback: (data: any) => void) => void;
       onInitialData: (callback: (data: any) => void) => void;
       onAchievementUnlocked: (callback: (achievement: string) => void) => void;
+      onChallengeCompleted: (callback: (challenge: any) => void) => void;
       requestData: () => void;
+      createGoal: (goalData: any) => void;
     };
   }
+}
+
+// Interfaces matching main.ts
+interface Achievement {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  unlockedAt: string;
+  category: 'milestone' | 'streak' | 'time' | 'challenge' | 'special';
+}
+
+interface Challenge {
+  id: string;
+  name: string;
+  description: string;
+  type: 'daily' | 'weekly';
+  target: number;
+  progress: number;
+  startDate: string;
+  endDate: string;
+  completed: boolean;
+  reward?: string;
+}
+
+interface Goal {
+  id: string;
+  name: string;
+  description: string;
+  target: number;
+  current: number;
+  type: 'daily' | 'weekly' | 'monthly' | 'custom';
+  createdDate: string;
+  targetDate?: string;
+  completed: boolean;
 }
 
 // State
@@ -24,13 +66,22 @@ let totalKeystrokes = 0;
 let sessionKeystrokes = 0;
 let todayKeystrokes = 0;
 let streakDays = 0;
-let achievements: string[] = [];
+let longestStreak = 0;
+let achievements: Achievement[] = [];
+let legacyAchievements: string[] = [];
 let dailyData: Record<string, number> = {};
 let hourlyData: Record<string, number[]> = {};
 let firstUsedDate = '';
+let challenges: Challenge[] = [];
+let goals: Goal[] = [];
+let userLevel = 1;
+let userXP = 0;
+let personalityType = '';
+let dailyGoal = 5000;
+let weeklyGoal = 35000;
 
 // Current view state
-let currentView: 'today' | 'week' | 'month' | 'year' | 'insights' = 'today';
+let currentView: 'today' | 'week' | 'month' | 'year' | 'insights' | 'achievements' | 'challenges' | 'goals' = 'today';
 
 // Format large numbers
 function formatNumber(num: number): string {
@@ -49,6 +100,19 @@ function createDashboard() {
       <header>
         <h1>TypeCount</h1>
         <p class="tagline">Your Digital Typing Footprint</p>
+
+        <!-- User Level & XP Display -->
+        <div class="user-level">
+          <div class="level-badge">
+            <span class="level-number" id="user-level">1</span>
+            <span class="level-label">Level</span>
+          </div>
+          <div class="xp-bar">
+            <div class="xp-progress" id="xp-progress" style="width: 0%"></div>
+            <span class="xp-text" id="xp-text">0 / 1000 XP</span>
+          </div>
+          <div class="personality-type" id="personality-type"></div>
+        </div>
       </header>
 
       <div class="stats-grid">
@@ -85,6 +149,9 @@ function createDashboard() {
           <button class="tab-button" data-view="month">Month</button>
           <button class="tab-button" data-view="year">Year</button>
           <button class="tab-button" data-view="insights">Insights</button>
+          <button class="tab-button" data-view="achievements">🏆 Achievements</button>
+          <button class="tab-button" data-view="challenges">🎯 Challenges</button>
+          <button class="tab-button" data-view="goals">📋 Goals</button>
         </div>
 
         <div class="tab-content" id="analytics-content">
@@ -119,8 +186,10 @@ function createDashboard() {
       const view = target.dataset.view as typeof currentView;
 
       // Update active tab
-      document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-      target.classList.add('active');
+      document.querySelectorAll('.tab-button').forEach(btn => {
+        if (btn) btn.classList.remove('active');
+      });
+      if (target) target.classList.add('active');
 
       currentView = view;
       renderAnalytics();
@@ -135,7 +204,11 @@ function createDashboard() {
 // Render analytics based on current view
 function renderAnalytics() {
   const contentEl = document.getElementById('analytics-content');
-  if (!contentEl) return;
+  if (!contentEl) {
+    console.error('Analytics content element not found');
+    showNotification('Analytics view failed to load');
+    return;
+  }
 
   try {
     switch (currentView) {
@@ -153,6 +226,15 @@ function renderAnalytics() {
         break;
       case 'insights':
         renderInsightsView(contentEl);
+        break;
+      case 'achievements':
+        renderAchievementsView(contentEl);
+        break;
+      case 'challenges':
+        renderChallengesView(contentEl);
+        break;
+      case 'goals':
+        renderGoalsView(contentEl);
         break;
     }
   } catch (error) {
@@ -393,6 +475,265 @@ function createMonthlyChart(months: { month: string; count: number }[]): string 
   `;
 }
 
+// Render achievements view
+function renderAchievementsView(): string {
+  const categories = ['milestone', 'streak', 'time', 'special', 'challenge'];
+
+  return `
+    <div class="achievements-container">
+      <div class="achievements-header">
+        <h3>🏆 Achievements</h3>
+        <div class="achievement-stats">
+          <span class="stat-item">
+            <strong>${achievements.length}</strong> unlocked
+          </span>
+          <span class="stat-item">
+            <strong>Level ${userLevel}</strong>
+            <small>(${userXP} XP)</small>
+          </span>
+        </div>
+      </div>
+
+      ${categories.map(category => {
+        const categoryAchievements = achievements.filter(a => a.category === category);
+        const totalInCategory = ACHIEVEMENT_DEFINITIONS.filter(def => def.category === category).length;
+
+        return `
+          <div class="achievement-category">
+            <h4>${category.charAt(0).toUpperCase() + category.slice(1)}
+              <span class="category-progress">(${categoryAchievements.length}/${totalInCategory})</span>
+            </h4>
+            <div class="achievement-grid">
+              ${categoryAchievements.map(achievement => `
+                <div class="achievement-card unlocked">
+                  <div class="achievement-icon">${achievement.icon}</div>
+                  <div class="achievement-details">
+                    <h5>${achievement.name}</h5>
+                    <p>${achievement.description}</p>
+                    <small>Unlocked: ${new Date(achievement.unlockedAt).toLocaleDateString()}</small>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+// Render challenges view
+function renderChallengesView(): string {
+  const activeChallenges = challenges.filter(c => !c.completed);
+  const completedChallenges = challenges.filter(c => c.completed);
+
+  return `
+    <div class="challenges-container">
+      <div class="challenges-header">
+        <h3>🎯 Challenges</h3>
+        <div class="challenge-stats">
+          <span class="stat-item">
+            <strong>${activeChallenges.length}</strong> active
+          </span>
+          <span class="stat-item">
+            <strong>${completedChallenges.length}</strong> completed
+          </span>
+        </div>
+      </div>
+
+      ${activeChallenges.length > 0 ? `
+        <div class="challenge-section">
+          <h4>🔥 Active Challenges</h4>
+          <div class="challenges-grid">
+            ${activeChallenges.map(challenge => {
+              const progress = Math.min((challenge.progress / challenge.target) * 100, 100);
+              const timeLeft = new Date(challenge.endDate).getTime() - Date.now();
+              const daysLeft = Math.max(0, Math.ceil(timeLeft / (1000 * 60 * 60 * 24)));
+
+              return `
+                <div class="challenge-card active">
+                  <div class="challenge-header">
+                    <h5>${challenge.name}</h5>
+                    <span class="challenge-type ${challenge.type}">${challenge.type}</span>
+                  </div>
+                  <p>${challenge.description}</p>
+                  <div class="challenge-progress">
+                    <div class="progress-bar">
+                      <div class="progress-fill" style="width: ${progress}%"></div>
+                    </div>
+                    <span class="progress-text">${challenge.progress}/${challenge.target}</span>
+                  </div>
+                  <div class="challenge-footer">
+                    <span class="time-left">${daysLeft} day${daysLeft !== 1 ? 's' : ''} left</span>
+                    ${challenge.reward ? `<span class="reward">🎁 ${challenge.reward}</span>` : ''}
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      ${completedChallenges.length > 0 ? `
+        <div class="challenge-section">
+          <h4>✅ Recent Completions</h4>
+          <div class="challenges-grid">
+            ${completedChallenges.slice(-6).map(challenge => `
+              <div class="challenge-card completed">
+                <div class="challenge-header">
+                  <h5>${challenge.name} ✓</h5>
+                  <span class="challenge-type ${challenge.type}">${challenge.type}</span>
+                </div>
+                <p>${challenge.description}</p>
+                <div class="challenge-completion">
+                  <span class="completion-text">Completed ${new Date(challenge.endDate).toLocaleDateString()}</span>
+                  ${challenge.reward ? `<span class="reward earned">🎁 ${challenge.reward}</span>` : ''}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      ${activeChallenges.length === 0 && completedChallenges.length === 0 ? `
+        <div class="empty-state">
+          <p>No challenges available yet. Start typing to unlock your first challenge!</p>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+// Render goals view
+function renderGoalsView(): string {
+  const activeGoals = goals.filter(g => !g.completed);
+  const completedGoals = goals.filter(g => g.completed);
+
+  return `
+    <div class="goals-container">
+      <div class="goals-header">
+        <h3>🎯 Personal Goals</h3>
+        <div class="goals-stats">
+          <span class="stat-item">
+            <strong>${activeGoals.length}</strong> active
+          </span>
+          <span class="stat-item">
+            <strong>${completedGoals.length}</strong> achieved
+          </span>
+        </div>
+        <button class="create-goal-btn" onclick="showCreateGoalModal()">+ Create Goal</button>
+      </div>
+
+      ${activeGoals.length > 0 ? `
+        <div class="goals-section">
+          <h4>🎯 Active Goals</h4>
+          <div class="goals-list">
+            ${activeGoals.map(goal => {
+              const progress = Math.min((goal.current / goal.target) * 100, 100);
+              const isOverdue = goal.targetDate && new Date(goal.targetDate) < new Date();
+
+              return `
+                <div class="goal-card ${isOverdue ? 'overdue' : ''}">
+                  <div class="goal-header">
+                    <h5>${goal.name}</h5>
+                    <span class="goal-type ${goal.type}">${goal.type}</span>
+                  </div>
+                  <p>${goal.description}</p>
+                  <div class="goal-progress">
+                    <div class="progress-bar large">
+                      <div class="progress-fill" style="width: ${progress}%"></div>
+                    </div>
+                    <div class="progress-details">
+                      <span class="progress-text">${goal.current.toLocaleString()} / ${goal.target.toLocaleString()}</span>
+                      <span class="progress-percent">${progress.toFixed(1)}%</span>
+                    </div>
+                  </div>
+                  ${goal.targetDate ? `
+                    <div class="goal-timeline">
+                      <span class="timeline-label">Target:</span>
+                      <span class="target-date ${isOverdue ? 'overdue' : ''}">${new Date(goal.targetDate).toLocaleDateString()}</span>
+                    </div>
+                  ` : ''}
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      ${completedGoals.length > 0 ? `
+        <div class="goals-section">
+          <h4>🏆 Achieved Goals</h4>
+          <div class="goals-list">
+            ${completedGoals.slice(-5).map(goal => `
+              <div class="goal-card completed">
+                <div class="goal-header">
+                  <h5>${goal.name} ✓</h5>
+                  <span class="goal-type ${goal.type}">${goal.type}</span>
+                </div>
+                <p>${goal.description}</p>
+                <div class="goal-achievement">
+                  <span class="achievement-text">🎉 Goal achieved!</span>
+                  <span class="achievement-date">Completed: ${new Date().toLocaleDateString()}</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      ${activeGoals.length === 0 && completedGoals.length === 0 ? `
+        <div class="empty-state">
+          <h4>🚀 Ready to set your first goal?</h4>
+          <p>Create a personal typing goal to track your progress and stay motivated!</p>
+          <button class="create-goal-btn primary" onclick="showCreateGoalModal()">Create Your First Goal</button>
+        </div>
+      ` : ''}
+    </div>
+
+    <!-- Goal Creation Modal (hidden by default) -->
+    <div id="goalModal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h4>🎯 Create New Goal</h4>
+          <button class="close-btn" onclick="hideCreateGoalModal()">&times;</button>
+        </div>
+        <form id="goalForm" onsubmit="createNewGoal(event)">
+          <div class="form-group">
+            <label for="goalName">Goal Name:</label>
+            <input type="text" id="goalName" required placeholder="e.g., Type 10,000 keystrokes this week">
+          </div>
+          <div class="form-group">
+            <label for="goalDescription">Description:</label>
+            <textarea id="goalDescription" placeholder="Optional description for your goal"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="goalTarget">Target (keystrokes):</label>
+            <input type="number" id="goalTarget" required min="1" placeholder="e.g., 10000">
+          </div>
+          <div class="form-group">
+            <label for="goalType">Goal Type:</label>
+            <select id="goalType" required>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="goalTargetDate">Target Date (optional):</label>
+            <input type="date" id="goalTargetDate">
+          </div>
+          <div class="form-actions">
+            <button type="button" class="cancel-btn" onclick="hideCreateGoalModal()">Cancel</button>
+            <button type="submit" class="create-btn">Create Goal</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
 // Handle CSV export
 function handleExportCSV() {
   try {
@@ -439,18 +780,35 @@ function downloadFile(content: string, filename: string, type: string) {
 
 // Update the UI with new data
 function updateUI() {
-  const totalEl = document.getElementById('total-count');
-  const todayEl = document.getElementById('today-count');
-  const sessionEl = document.getElementById('session-count');
-  const streakEl = document.getElementById('streak-count');
+  try {
+    const elements = {
+      totalEl: document.getElementById('total-count'),
+      todayEl: document.getElementById('today-count'),
+      sessionEl: document.getElementById('session-count'),
+      streakEl: document.getElementById('streak-count')
+    };
 
-  if (totalEl) totalEl.textContent = formatNumber(totalKeystrokes);
-  if (todayEl) todayEl.textContent = formatNumber(todayKeystrokes);
-  if (sessionEl) sessionEl.textContent = formatNumber(sessionKeystrokes);
-  if (streakEl) streakEl.textContent = `${streakDays}`;
+    // Update basic stats with error handling
+    if (elements.totalEl) elements.totalEl.textContent = formatNumber(totalKeystrokes);
+    if (elements.todayEl) elements.todayEl.textContent = formatNumber(todayKeystrokes);
+    if (elements.sessionEl) elements.sessionEl.textContent = formatNumber(sessionKeystrokes);
+    if (elements.streakEl) elements.streakEl.textContent = `${streakDays}`;
 
-  updateAchievements();
-  renderAnalytics();
+    // Log missing critical elements
+    const missingElements = Object.entries(elements)
+      .filter(([_, element]) => !element)
+      .map(([key]) => key);
+
+    if (missingElements.length > 0) {
+      console.warn('Missing UI elements:', missingElements);
+    }
+
+    updateAchievements();
+    renderAnalytics();
+  } catch (error) {
+    console.error('Error updating UI:', error);
+    showNotification('UI update failed - please refresh the page');
+  }
 }
 
 // Update achievements display
@@ -480,6 +838,71 @@ function updateAchievements() {
   `).join('');
 }
 
+// Goal management functions
+function showCreateGoalModal() {
+  const modal = document.getElementById('goalModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    const goalNameInput = document.getElementById('goalName') as HTMLInputElement;
+    if (goalNameInput) goalNameInput.focus();
+  }
+}
+
+function hideCreateGoalModal() {
+  const modal = document.getElementById('goalModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    // Reset form
+    const form = document.getElementById('goalForm') as HTMLFormElement;
+    if (form) form.reset();
+  }
+}
+
+function createNewGoal(event: Event) {
+  event.preventDefault();
+
+  const form = event.target as HTMLFormElement;
+  if (!form) {
+    showNotification('Error: Form not found');
+    return;
+  }
+
+  try {
+    const formData = new FormData(form);
+
+    const goalName = formData.get('goalName') as string;
+    const goalTarget = formData.get('goalTarget') as string;
+
+    if (!goalName || !goalTarget) {
+      showNotification('Error: Please fill in all required fields');
+      return;
+    }
+
+    const goalData = {
+      name: goalName,
+      description: formData.get('goalDescription') as string || '',
+      target: parseInt(goalTarget),
+      type: formData.get('goalType') as 'daily' | 'weekly' | 'monthly' | 'custom',
+      targetDate: formData.get('goalTargetDate') as string || undefined
+    };
+
+    if (isNaN(goalData.target) || goalData.target <= 0) {
+      showNotification('Error: Please enter a valid target number');
+      return;
+    }
+
+    // Send to main process
+    window.electronAPI.createGoal(goalData);
+
+    // Hide modal and show notification
+    hideCreateGoalModal();
+    showNotification(`Goal "${goalData.name}" created successfully!`);
+  } catch (error) {
+    showNotification('Error: Failed to create goal');
+    console.error('Error creating goal:', error);
+  }
+}
+
 // Show notification
 function showNotification(message: string) {
   const notification = document.getElementById('notification');
@@ -491,6 +914,142 @@ function showNotification(message: string) {
   setTimeout(() => {
     notification.classList.remove('show');
   }, 3000);
+}
+
+// Celebration system for achievements and milestones
+function showCelebration(type: 'achievement' | 'challenge' | 'levelup', title: string, description?: string) {
+  try {
+    // Remove any existing celebrations to prevent duplicates
+    hideCelebration();
+
+    // Create celebration overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'celebration-overlay';
+
+    const celebration = document.createElement('div');
+    celebration.className = `celebration celebration-${type}`;
+
+    // Add confetti animation with error handling
+    const confetti = document.createElement('div');
+    confetti.className = 'confetti-container';
+
+    try {
+      for (let i = 0; i < 20; i++) {
+        const piece = document.createElement('div');
+        piece.className = 'confetti-piece';
+        piece.style.left = Math.random() * 100 + '%';
+        piece.style.animationDelay = Math.random() * 2 + 's';
+        piece.style.backgroundColor = getRandomColor();
+        confetti.appendChild(piece);
+      }
+    } catch (confettiError) {
+      console.warn('Confetti animation failed:', confettiError);
+    }
+
+    const content = `
+      <div class="celebration-content">
+        <div class="celebration-icon">
+          ${getCelebrationIcon(type)}
+        </div>
+        <h2 class="celebration-title">${title}</h2>
+        ${description ? `<p class="celebration-description">${description}</p>` : ''}
+        <button class="celebration-close" onclick="hideCelebration()">Continue</button>
+      </div>
+    `;
+
+    celebration.innerHTML = content;
+    overlay.appendChild(confetti);
+    overlay.appendChild(celebration);
+
+    if (document.body) {
+      document.body.appendChild(overlay);
+    } else {
+      console.error('Document body not available for celebration');
+      return;
+    }
+
+    // Auto hide after 5 seconds with error handling
+    setTimeout(() => {
+      try {
+        hideCelebration();
+      } catch (error) {
+        console.error('Error auto-hiding celebration:', error);
+      }
+    }, 5000);
+  } catch (error) {
+    console.error('Error showing celebration:', error);
+    showNotification(`${type} celebration: ${title}`);
+  }
+}
+
+function getCelebrationIcon(type: string): string {
+  switch (type) {
+    case 'achievement': return '🏆';
+    case 'challenge': return '🎯';
+    case 'levelup': return '⭐';
+    default: return '🎉';
+  }
+}
+
+function getRandomColor(): string {
+  const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57', '#ff9ff3', '#54a0ff'];
+  return colors[Math.floor(Math.random() * colors.length)];
+}
+
+function hideCelebration() {
+  try {
+    const overlay = document.querySelector('.celebration-overlay') as HTMLElement;
+    if (overlay) {
+      overlay.classList.add('fade-out');
+      setTimeout(() => {
+        try {
+          if (overlay.parentNode) {
+            overlay.remove();
+          }
+        } catch (removeError) {
+          console.warn('Error removing celebration overlay:', removeError);
+        }
+      }, 300);
+    }
+  } catch (error) {
+    console.error('Error hiding celebration:', error);
+  }
+}
+
+// Enhanced achievement notification with celebration
+function celebrateAchievement(achievement: string) {
+  const achievementNames: Record<string, string> = {
+    'first_keystroke': 'First Steps!',
+    'hundred_keystrokes': 'Getting Started!',
+    '1k_keystrokes': 'Bronze Typist!',
+    '5k_keystrokes': 'Active Typist!',
+    '10k_keystrokes': 'Silver Typist!',
+    '25k_keystrokes': 'Dedicated Typist!',
+    '50k_keystrokes': 'Serious Typist!',
+    '100k_keystrokes': 'Gold Typist!',
+    '250k_keystrokes': 'Expert Typist!',
+    '500k_keystrokes': 'Master Typist!',
+    '1m_keystrokes': 'Legendary Typist!'
+  };
+
+  const achievementDescriptions: Record<string, string> = {
+    'first_keystroke': 'Your journey begins!',
+    'hundred_keystrokes': 'You\'re getting the hang of this!',
+    '1k_keystrokes': 'First milestone reached!',
+    '5k_keystrokes': 'You\'re on fire!',
+    '10k_keystrokes': 'Impressive dedication!',
+    '25k_keystrokes': 'Keep up the great work!',
+    '50k_keystrokes': 'You\'re a typing machine!',
+    '100k_keystrokes': 'Amazing achievement!',
+    '250k_keystrokes': 'Expert level reached!',
+    '500k_keystrokes': 'Master of the keyboard!',
+    '1m_keystrokes': 'Legendary status achieved!'
+  };
+
+  const title = achievementNames[achievement] || 'Achievement Unlocked!';
+  const description = achievementDescriptions[achievement] || 'Keep up the great work!';
+
+  showCelebration('achievement', title, description);
 }
 
 // Initialize the app
@@ -510,6 +1069,11 @@ window.electronAPI.onInitialData((data) => {
   todayKeystrokes = data.today;
   streakDays = data.streak;
   achievements = data.achievements || [];
+  challenges = data.challenges || [];
+  goals = data.goals || [];
+  userLevel = data.userLevel || 1;
+  userXP = data.userXP || 0;
+  personalityType = data.personalityType || '';
   dailyData = data.dailyData || {};
   hourlyData = data.hourlyData || {};
   firstUsedDate = data.firstUsedDate || new Date().toISOString();
@@ -521,14 +1085,23 @@ window.electronAPI.onAchievementUnlocked((achievement) => {
   achievements.push(achievement);
   updateAchievements();
 
-  const achievementNames: Record<string, string> = {
-    '1K_keystrokes': '1,000 Keystrokes!',
-    '10K_keystrokes': '10,000 Keystrokes!',
-    '100K_keystrokes': '100,000 Keystrokes!',
-    '1M_keystrokes': '1 Million Keystrokes!'
-  };
+  // Show celebration animation
+  celebrateAchievement(achievement.id);
+});
 
-  showNotification(`🎉 Achievement Unlocked: ${achievementNames[achievement] || achievement}`);
+window.electronAPI.onChallengeCompleted((challenge) => {
+  // Update local challenges data
+  challenges = challenges.map(c =>
+    c.id === challenge.id ? challenge : c
+  );
+
+  // Show celebration animation
+  showCelebration('challenge', `Challenge Complete!`, `${challenge.name} - Earned ${challenge.reward || '0 XP'}`);
+
+  // Update UI to reflect completion
+  if (currentView === 'challenges') {
+    renderAnalytics();
+  }
 });
 
 // Request initial data on load

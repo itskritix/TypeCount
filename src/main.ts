@@ -5,6 +5,16 @@ import Store from 'electron-store';
 import { uIOhook, UiohookKey } from 'uiohook-napi';
 import AutoLaunch from 'auto-launch';
 import { autoUpdater } from 'electron-updater';
+import {
+  checkAchievements,
+  generateDailyChallenge,
+  generateWeeklyChallenge,
+  calculateLevel,
+  determinePersonalityType,
+  getDailyProgress,
+  getWeeklyProgress,
+  updateGoalProgress
+} from './gamification';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -18,6 +28,40 @@ const autoLauncher = new AutoLaunch({
 });
 
 // Initialize electron-store for data persistence
+interface Achievement {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  unlockedAt: string;
+  category: 'milestone' | 'streak' | 'time' | 'challenge' | 'special';
+}
+
+interface Challenge {
+  id: string;
+  name: string;
+  description: string;
+  type: 'daily' | 'weekly';
+  target: number;
+  progress: number;
+  startDate: string;
+  endDate: string;
+  completed: boolean;
+  reward?: string;
+}
+
+interface Goal {
+  id: string;
+  name: string;
+  description: string;
+  target: number;
+  current: number;
+  type: 'daily' | 'weekly' | 'monthly' | 'custom';
+  createdDate: string;
+  targetDate?: string;
+  completed: boolean;
+}
+
 interface StoreSchema {
   totalKeystrokes: number;
   dailyKeystrokes: Record<string, number>;
@@ -25,10 +69,21 @@ interface StoreSchema {
   currentSessionKeystrokes: number;
   firstUsedDate: string;
   lastResetDate: string;
-  achievements: string[];
+  achievements: Achievement[];
+  legacyAchievements: string[]; // For backward compatibility
   streakDays: number;
+  longestStreak: number;
   lastActiveDate: string;
   autoLaunchEnabled: boolean;
+  challenges: Challenge[];
+  goals: Goal[];
+  userLevel: number;
+  userXP: number;
+  personalityType: string;
+  dailyGoal: number;
+  weeklyGoal: number;
+  totalSessions: number;
+  averageSessionLength: number;
 }
 
 const store = new Store<StoreSchema>({
@@ -40,9 +95,20 @@ const store = new Store<StoreSchema>({
     firstUsedDate: new Date().toISOString(),
     lastResetDate: new Date().toISOString(),
     achievements: [],
+    legacyAchievements: [],
     streakDays: 0,
+    longestStreak: 0,
     lastActiveDate: new Date().toISOString(),
-    autoLaunchEnabled: true
+    autoLaunchEnabled: true,
+    challenges: [],
+    goals: [],
+    userLevel: 1,
+    userXP: 0,
+    personalityType: '',
+    dailyGoal: 5000,
+    weeklyGoal: 35000,
+    totalSessions: 0,
+    averageSessionLength: 0
   }
 });
 
@@ -50,6 +116,12 @@ let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let keystrokeCount = 0;
 let sessionStartTime = Date.now();
+
+// Performance optimization variables
+let achievementCheckCounter = 0;
+let lastAchievementCheck = Date.now();
+const ACHIEVEMENT_CHECK_INTERVAL = 50; // Check achievements every 50 keystrokes
+const ACHIEVEMENT_CHECK_TIME_INTERVAL = 30000; // Or every 30 seconds
 
 // Track keystrokes without storing actual keys (privacy-first)
 const startKeystrokeTracking = () => {
@@ -64,7 +136,11 @@ const startKeystrokeTracking = () => {
         mainWindow.webContents.send('keystroke-update', {
           total: store.get('totalKeystrokes'),
           session: store.get('currentSessionKeystrokes'),
-          today: getTodayKeystrokes()
+          today: getTodayKeystrokes(),
+          streak: store.get('streakDays'),
+          userLevel: store.get('userLevel'),
+          userXP: store.get('userXP'),
+          dailyProgress: getDailyProgress(getTodayKeystrokes(), store.get('dailyGoal'))
         });
       }
     });
@@ -91,7 +167,8 @@ const stopKeystrokeTracking = () => {
 
 const updateKeystrokeData = () => {
   // Update total count
-  store.set('totalKeystrokes', store.get('totalKeystrokes') + 1);
+  const newTotal = store.get('totalKeystrokes') + 1;
+  store.set('totalKeystrokes', newTotal);
 
   // Update session count
   store.set('currentSessionKeystrokes', store.get('currentSessionKeystrokes') + 1);
@@ -104,7 +181,6 @@ const updateKeystrokeData = () => {
 
   // Update hourly count
   const hour = new Date().getHours();
-  const hourlyKey = `${today}-${hour}`;
   const hourlyKeystrokes = store.get('hourlyKeystrokes');
   if (!hourlyKeystrokes[today]) {
     hourlyKeystrokes[today] = new Array(24).fill(0);
@@ -112,11 +188,41 @@ const updateKeystrokeData = () => {
   hourlyKeystrokes[today][hour]++;
   store.set('hourlyKeystrokes', hourlyKeystrokes);
 
-  // Update streak
-  updateStreak();
+  // Update XP (1 keystroke = 1 XP, with bonuses)
+  let xpGain = 1;
+  const currentXP = store.get('userXP');
+  const currentStreak = store.get('streakDays');
 
-  // Check for achievements
-  checkAchievements();
+  // Streak bonus: +1 XP for every 7 days of streak
+  if (currentStreak > 0) {
+    xpGain += Math.floor(currentStreak / 7);
+  }
+
+  store.set('userXP', currentXP + xpGain);
+  store.set('userLevel', calculateLevel(currentXP + xpGain));
+
+  // Update streak and personality
+  updateStreak();
+  updatePersonalityType();
+
+  // Performance-optimized achievement and challenge checking
+  achievementCheckCounter++;
+  const currentTime = Date.now();
+  const shouldCheckAchievements =
+    achievementCheckCounter >= ACHIEVEMENT_CHECK_INTERVAL ||
+    currentTime - lastAchievementCheck >= ACHIEVEMENT_CHECK_TIME_INTERVAL;
+
+  if (shouldCheckAchievements) {
+    // Check for new achievements
+    checkForNewAchievements(newTotal, currentStreak, hourlyKeystrokes);
+
+    // Update challenges and goals
+    updateChallengesAndGoals();
+
+    // Reset counters
+    achievementCheckCounter = 0;
+    lastAchievementCheck = currentTime;
+  }
 };
 
 const getTodayKeystrokes = () => {
@@ -134,7 +240,14 @@ const updateStreak = () => {
     const yesterdayStr = yesterday.toISOString().split('T')[0];
 
     if (lastActive === yesterdayStr) {
-      store.set('streakDays', store.get('streakDays') + 1);
+      const newStreak = store.get('streakDays') + 1;
+      store.set('streakDays', newStreak);
+
+      // Update longest streak
+      const longestStreak = store.get('longestStreak');
+      if (newStreak > longestStreak) {
+        store.set('longestStreak', newStreak);
+      }
     } else {
       store.set('streakDays', 1);
     }
@@ -142,27 +255,197 @@ const updateStreak = () => {
   }
 };
 
-const checkAchievements = () => {
-  const total = store.get('totalKeystrokes');
-  const achievements = store.get('achievements');
+const updatePersonalityType = () => {
+  const hourlyData = store.get('hourlyKeystrokes');
+  const personalityType = determinePersonalityType(hourlyData);
+  store.set('personalityType', personalityType);
+};
 
-  const milestones = [
-    { count: 1000, name: '1K_keystrokes' },
-    { count: 10000, name: '10K_keystrokes' },
-    { count: 100000, name: '100K_keystrokes' },
-    { count: 1000000, name: '1M_keystrokes' }
-  ];
+const checkForNewAchievements = (totalKeystrokes: number, streakDays: number, hourlyData: Record<string, number[]>) => {
+  const currentAchievements = store.get('achievements');
+  const newAchievements = checkAchievements(totalKeystrokes, streakDays, hourlyData, currentAchievements);
 
-  for (const milestone of milestones) {
-    if (total >= milestone.count && !achievements.includes(milestone.name)) {
-      achievements.push(milestone.name);
-      store.set('achievements', achievements);
+  if (newAchievements.length > 0) {
+    const allAchievements = [...currentAchievements, ...newAchievements];
+    store.set('achievements', allAchievements);
 
-      // Show notification for achievement
+    // Notify renderer of new achievements
+    for (const achievement of newAchievements) {
       if (mainWindow) {
-        mainWindow.webContents.send('achievement-unlocked', milestone.name);
+        mainWindow.webContents.send('achievement-unlocked', achievement);
       }
     }
+  }
+
+  // Migrate legacy achievements if they exist
+  const legacyAchievements = store.get('legacyAchievements');
+  if (legacyAchievements && legacyAchievements.length > 0) {
+    // Convert legacy achievement IDs to new format if needed
+    store.set('legacyAchievements', []);
+  }
+};
+
+// Helper function to get week start (Sunday)
+const getWeekStart = (date: Date): string => {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day; // adjust when day is Sunday
+  d.setDate(diff);
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString().split('T')[0];
+};
+
+const updateChallengesAndGoals = () => {
+  const today = new Date().toISOString().split('T')[0];
+  const todayKeystrokes = getTodayKeystrokes();
+
+  // Update daily goals
+  let goals = store.get('goals');
+  goals = goals.map(goal => {
+    if (goal.type === 'daily' && !goal.completed) {
+      return updateGoalProgress(goal, todayKeystrokes);
+    }
+    return goal;
+  });
+  store.set('goals', goals);
+
+  // Update challenges
+  let challenges = store.get('challenges');
+  const hourlyData = store.get('hourlyKeystrokes');
+  const todayHours = hourlyData[today] || new Array(24).fill(0);
+
+  // Remove expired challenges
+  challenges = challenges.filter(challenge => {
+    const endDate = new Date(challenge.endDate);
+    return endDate >= new Date();
+  });
+
+  challenges = challenges.map(challenge => {
+    if (!challenge.completed) {
+      let progress = challenge.progress;
+
+      if (challenge.type === 'daily') {
+        switch (challenge.id) {
+          case 'daily_target':
+          case 'beat_yesterday':
+            progress = todayKeystrokes;
+            break;
+
+          case 'morning_boost':
+            progress = todayHours.slice(0, 12).reduce((sum, count) => sum + count, 0);
+            break;
+
+          case 'consistency_challenge':
+            // Count hours with activity today
+            const activeHours = todayHours.filter(count => count > 0).length;
+            progress = activeHours;
+            break;
+        }
+      } else if (challenge.type === 'weekly') {
+        const weekStart = new Date(challenge.startDate);
+        const currentWeekData = [];
+
+        // Calculate weekly progress
+        for (let i = 0; i < 7; i++) {
+          const checkDate = new Date(weekStart);
+          checkDate.setDate(weekStart.getDate() + i);
+          const dateStr = checkDate.toISOString().split('T')[0];
+
+          if (checkDate <= new Date()) {
+            currentWeekData.push(store.get('dailyKeystrokes')[dateStr] || 0);
+          }
+        }
+
+        switch (challenge.id) {
+          case 'weekly_milestone':
+            progress = currentWeekData.reduce((sum, count) => sum + count, 0);
+            break;
+
+          case 'perfect_week':
+            // Count days with activity
+            progress = currentWeekData.filter(count => count > 0).length;
+            break;
+
+          case 'weekend_warrior':
+            // Weekend keystrokes (Saturday and Sunday)
+            const weekend = currentWeekData.slice(-2);
+            progress = weekend.reduce((sum, count) => sum + count, 0);
+            break;
+        }
+      }
+
+      const completed = progress >= challenge.target;
+      if (completed && !challenge.completed) {
+        // Award XP for completing challenge
+        const currentXP = store.get('userXP');
+        const xpReward = parseInt(challenge.reward?.replace(' XP', '') || '0');
+        store.set('userXP', currentXP + xpReward);
+        store.set('userLevel', calculateLevel(currentXP + xpReward));
+
+        // Show achievement notification
+        if (mainWindow) {
+          mainWindow.webContents.send('challenge-completed', challenge);
+        }
+      }
+
+      return { ...challenge, progress, completed };
+    }
+    return challenge;
+  });
+  store.set('challenges', challenges);
+
+  // Generate new daily challenge if none exists for today
+  const todayChallenges = challenges.filter(c =>
+    c.type === 'daily' && c.startDate === today
+  );
+
+  if (todayChallenges.length === 0) {
+    // Calculate average for challenge generation
+    const dailyData = store.get('dailyKeystrokes');
+    const recentDays = Object.values(dailyData).slice(-7);
+    const avgDaily = recentDays.length > 0
+      ? recentDays.reduce((sum, count) => sum + count, 0) / recentDays.length
+      : 1000;
+
+    const newChallenge = generateDailyChallenge(avgDaily, todayKeystrokes);
+    challenges.push(newChallenge);
+    store.set('challenges', challenges);
+  }
+
+  // Generate new weekly challenge if none exists for this week
+  const currentWeekStart = getWeekStart(new Date());
+  const thisWeekChallenges = challenges.filter(c =>
+    c.type === 'weekly' && c.startDate === currentWeekStart
+  );
+
+  if (thisWeekChallenges.length === 0) {
+    // Calculate weekly average for challenge generation
+    const dailyData = store.get('dailyKeystrokes');
+    const weeklyTotals = [];
+
+    // Get last 4 weeks of data
+    for (let week = 0; week < 4; week++) {
+      const weekDate = new Date();
+      weekDate.setDate(weekDate.getDate() - (week * 7));
+      const weekStartDate = getWeekStart(weekDate);
+
+      let weekTotal = 0;
+      for (let day = 0; day < 7; day++) {
+        const date = new Date(weekStartDate);
+        date.setDate(date.getDate() + day);
+        const dateStr = date.toISOString().split('T')[0];
+        weekTotal += dailyData[dateStr] || 0;
+      }
+      weeklyTotals.push(weekTotal);
+    }
+
+    const avgWeekly = weeklyTotals.length > 0
+      ? weeklyTotals.reduce((sum, total) => sum + total, 0) / weeklyTotals.length
+      : 7000; // Default weekly target
+
+    const newWeeklyChallenge = generateWeeklyChallenge(avgWeekly);
+    challenges.push(newWeeklyChallenge);
+    store.set('challenges', challenges);
   }
 };
 
@@ -432,8 +715,53 @@ ipcMain.on('request-data', (event) => {
     dailyData: store.get('dailyKeystrokes'),
     hourlyData: store.get('hourlyKeystrokes'),
     achievements: store.get('achievements'),
+    legacyAchievements: store.get('legacyAchievements'),
     streak: store.get('streakDays'),
-    firstUsedDate: store.get('firstUsedDate') || new Date().toISOString()
+    longestStreak: store.get('longestStreak'),
+    firstUsedDate: store.get('firstUsedDate') || new Date().toISOString(),
+    challenges: store.get('challenges'),
+    goals: store.get('goals'),
+    userLevel: store.get('userLevel'),
+    userXP: store.get('userXP'),
+    personalityType: store.get('personalityType'),
+    dailyGoal: store.get('dailyGoal'),
+    weeklyGoal: store.get('weeklyGoal')
+  });
+});
+
+// IPC handler for creating goals
+ipcMain.on('create-goal', (event, goalData) => {
+  const goal = createGoal(
+    goalData.name,
+    goalData.description || '',
+    goalData.target,
+    goalData.type,
+    goalData.targetDate
+  );
+
+  let goals = store.get('goals');
+  goals.push(goal);
+  store.set('goals', goals);
+
+  // Send updated data back to renderer
+  event.reply('initial-data', {
+    total: store.get('totalKeystrokes'),
+    session: store.get('currentSessionKeystrokes'),
+    today: getTodayKeystrokes(),
+    dailyData: store.get('dailyKeystrokes'),
+    hourlyData: store.get('hourlyKeystrokes'),
+    achievements: store.get('achievements'),
+    legacyAchievements: store.get('legacyAchievements'),
+    streak: store.get('streakDays'),
+    longestStreak: store.get('longestStreak'),
+    firstUsedDate: store.get('firstUsedDate') || new Date().toISOString(),
+    challenges: store.get('challenges'),
+    goals: store.get('goals'),
+    userLevel: store.get('userLevel'),
+    userXP: store.get('userXP'),
+    personalityType: store.get('personalityType'),
+    dailyGoal: store.get('dailyGoal'),
+    weeklyGoal: store.get('weeklyGoal')
   });
 });
 

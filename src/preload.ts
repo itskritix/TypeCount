@@ -15,7 +15,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onAchievementUnlocked: (callback: (achievement: string) => void) => {
     ipcRenderer.on('achievement-unlocked', (_event, achievement) => callback(achievement));
   },
+  onChallengeCompleted: (callback: (challenge: any) => void) => {
+    ipcRenderer.on('challenge-completed', (_event, challenge) => callback(challenge));
+  },
   requestData: () => {
     ipcRenderer.send('request-data');
+  },
+  createGoal: (goalData: any) => {
+    ipcRenderer.send('create-goal', goalData);
   }
 });
