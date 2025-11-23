@@ -357,7 +357,7 @@ class KeystrokeTracker {
 
       // Primary storage operations
       store.set('totalKeystrokes', this.cachedStats.total);
-      store.set(`daily.${today}`, this.cachedStats.today);
+      store.set(`dailyKeystrokes.${today}`, this.cachedStats.today);
 
       // Backward compatibility - handle gracefully if it fails
       try {
@@ -707,8 +707,8 @@ const createWidget = () => {
   const widgetPosition = store.get('widgetPosition') as { x: number, y: number } | undefined;
 
   widgetWindow = new BrowserWindow({
-    width: 180,
-    height: 80,
+    width: 240,
+    height: 150, // Increased height for 3-tier layout
     x: widgetPosition?.x || 50,
     y: widgetPosition?.y || 50,
     frame: false,
@@ -747,87 +747,249 @@ const createWidget = () => {
     <head>
       <meta charset="UTF-8">
       <style>
+        :root {
+          --hud-primary: #06b6d4; /* Cyan */
+          --hud-secondary: #8b5cf6; /* Violet */
+          --hud-bg: rgba(10, 10, 12, 0.92);
+          --hud-dim: rgba(6, 182, 212, 0.2);
+        }
         body {
           margin: 0;
           padding: 0;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          background: rgba(24, 24, 27, 0.95);
-          backdrop-filter: blur(16px);
-          border-radius: 12px;
-          color: #fafafa;
+          font-family: 'Consolas', 'Monaco', monospace;
+          background: transparent;
+          color: var(--hud-primary);
           overflow: hidden;
-          cursor: move;
-          -webkit-app-region: drag;
           user-select: none;
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          box-sizing: border-box;
           height: 100vh;
           display: flex;
-          flex-direction: column;
+          align-items: center;
           justify-content: center;
         }
-        .widget-content {
-          padding: 12px;
-          text-align: center;
+
+        .hud-frame {
+          width: 220px;
+          height: 130px;
+          background: var(--hud-bg);
+          position: relative;
+          clip-path: polygon(
+            15px 0, 100% 0, 
+            100% calc(100% - 15px), calc(100% - 15px) 100%, 
+            0 100%, 0 15px
+          );
+          display: flex;
+          flex-direction: column;
+          padding: 2px;
+          -webkit-app-region: drag;
+          cursor: move;
         }
-        .title {
-          font-size: 10px;
-          text-transform: uppercase;
-          letter-spacing: 0.1em;
-          color: #a1a1aa;
-          font-weight: 600;
-          margin-bottom: 4px;
+
+        .hud-frame::before {
+          content: '';
+          position: absolute;
+          top: 0; left: 0; right: 0; bottom: 0;
+          background: linear-gradient(135deg, var(--hud-primary), var(--hud-secondary));
+          z-index: -1;
         }
-        .count {
-          font-size: 20px;
-          font-weight: 800;
+
+        .inner-content {
+          background: #09090b;
+          flex: 1;
+          clip-path: polygon(
+            14px 0, 100% 0, 
+            100% calc(100% - 14px), calc(100% - 14px) 100%, 
+            0 100%, 0 14px
+          );
+          display: flex;
+          flex-direction: column;
+          padding: 10px 14px;
+          position: relative;
+        }
+
+        .scanlines {
+          position: absolute;
+          top: 0; left: 0; right: 0; bottom: 0;
+          background: linear-gradient(
+            to bottom,
+            rgba(255,255,255,0),
+            rgba(255,255,255,0) 50%,
+            rgba(0,0,0,0.2) 50%,
+            rgba(0,0,0,0.2)
+          );
+          background-size: 100% 4px;
+          pointer-events: none;
+          opacity: 0.6;
+          z-index: 10;
+        }
+
+        .header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
           margin-bottom: 2px;
-          color: #fafafa;
-          font-feature-settings: "tnum";
+          font-size: 8px;
+          letter-spacing: 1px;
+          color: var(--hud-secondary);
+          opacity: 0.8;
+        }
+
+        .status-dot {
+          width: 4px; height: 4px;
+          background: var(--hud-primary);
+          border-radius: 50%;
+          box-shadow: 0 0 5px var(--hud-primary);
+          animation: blink 2s infinite;
+        }
+
+        /* HERO STAT: TOTAL */
+        .hero-section {
+          text-align: right;
+          margin-bottom: 8px;
+          border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+          padding-bottom: 4px;
+        }
+
+        .label-hero {
+          font-size: 9px;
+          color: var(--hud-secondary);
+          letter-spacing: 1px;
+          margin-bottom: -2px;
+        }
+
+        .count-hero {
+          font-size: 36px;
+          font-weight: 700;
+          color: #fff;
+          line-height: 1;
+          text-shadow: 0 0 15px var(--hud-secondary); /* Violet glow for hero */
           font-variant-numeric: tabular-nums;
         }
-        .today {
-          font-size: 11px;
-          color: #8b5cf6;
-          font-weight: 500;
+
+        /* SECONDARY STAT: TODAY */
+        .sub-section {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
         }
+
+        .label-sub {
+          font-size: 9px;
+          color: #a1a1aa;
+        }
+
+        .count-sub {
+          font-size: 18px;
+          font-weight: 600;
+          color: var(--hud-primary); /* Cyan for session */
+          text-shadow: 0 0 8px rgba(6, 182, 212, 0.4);
+        }
+
+        /* Activity Bar */
+        .activity-display {
+          margin-top: auto;
+          display: flex;
+          gap: 2px;
+          height: 4px;
+        }
+
+        .segment {
+          flex: 1;
+          background: var(--hud-dim);
+          transform: skewX(-20deg);
+          transition: background 0.1s;
+        }
+
+        .segment.active { background: var(--hud-primary); box-shadow: 0 0 5px var(--hud-primary); }
+        .segment.peak { background: var(--hud-secondary); box-shadow: 0 0 5px var(--hud-secondary); }
+
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
       </style>
     </head>
     <body>
-      <div class="widget-content">
-        <div class="title">TypeCount</div>
-        <div class="count" id="total-count">0</div>
-        <div class="today" id="today-count">Today: 0</div>
+      <div class="hud-frame">
+        <div class="inner-content">
+          <div class="scanlines"></div>
+          
+          <div class="header">
+            <span>TYPECOUNT.SYS</span>
+            <div class="status-dot"></div>
+          </div>
+
+          <!-- HERO: TOTAL -->
+          <div class="hero-section">
+            <div class="label-hero">LIFETIME</div>
+            <div class="count-hero" id="total-count">0</div>
+          </div>
+
+          <!-- SUB: TODAY -->
+          <div class="sub-section">
+            <div class="label-sub">SESSION</div>
+            <div class="count-sub" id="today-count">0</div>
+          </div>
+
+          <!-- Activity -->
+          <div class="activity-display" id="activity-segments">
+            <div class="segment"></div><div class="segment"></div>
+            <div class="segment"></div><div class="segment"></div>
+            <div class="segment"></div><div class="segment"></div>
+            <div class="segment"></div><div class="segment"></div>
+            <div class="segment"></div><div class="segment"></div>
+          </div>
+        </div>
       </div>
+
       <script>
-        // Widget update function
+        let lastTotal = 0;
+        let activityLevel = 0;
+        const segments = document.querySelectorAll('.segment');
+
         const updateWidget = (data) => {
           const totalEl = document.getElementById('total-count');
           const todayEl = document.getElementById('today-count');
+          
+          const total = data.total || 0;
+          const today = data.today || 0;
 
           if (totalEl) {
-            totalEl.textContent = formatNumber(data.total || 0);
-          }
-          if (todayEl) {
-            todayEl.textContent = 'Today: ' + formatNumber(data.today || 0);
+            totalEl.textContent = formatNumber(total);
+            todayEl.textContent = formatNumber(today);
+
+            // Flash effect on input (Total changes means user is typing)
+            if (total > lastTotal) {
+              // Pulse activity bar
+              activityLevel = Math.min(activityLevel + 2, 10);
+              renderSegments();
+            }
+            lastTotal = total;
           }
         };
+
+        const renderSegments = () => {
+          segments.forEach((seg, index) => {
+            if (index < activityLevel) {
+              seg.className = 'segment active';
+              if (index >= 8) seg.className += ' peak';
+            } else {
+              seg.className = 'segment';
+            }
+          });
+        };
+
+        setInterval(() => {
+          if (activityLevel > 0) {
+            activityLevel--;
+            renderSegments();
+          }
+        }, 300);
 
         const formatNumber = (num) => {
           if (num < 1000) return num.toString();
           if (num < 1000000) return (num / 1000).toFixed(1) + 'K';
-          if (num < 1000000000) return (num / 1000000).toFixed(1) + 'M';
-          return (num / 1000000000).toFixed(1) + 'B';
+          return (num / 1000000).toFixed(1) + 'M';
         };
 
-        // Listen for updates from main process
         const { ipcRenderer } = require('electron');
-
-        ipcRenderer.on('widget-update', (event, data) => {
-          updateWidget(data);
-        });
-
-        // Request initial data
+        ipcRenderer.on('widget-update', (event, data) => updateWidget(data));
         ipcRenderer.send('widget-request-data');
       </script>
     </body>
@@ -1350,7 +1512,9 @@ const createWindow = () => {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      // Disable autofill to prevent DevTools errors
+      disableBlinkFeatures: 'Autofill'
     },
     icon: getAppIconPath(),
     title: 'TypeCount'

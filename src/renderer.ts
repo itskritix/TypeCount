@@ -320,7 +320,7 @@ function renderInsightsView(container: HTMLElement) {
 
 
 
-// Render achievements view
+// Render achievements view with "Cyber Glass" effect
 function renderAchievementsView(): string {
   // Define milestone achievements with their unlock thresholds
   const milestoneAchievements = [
@@ -352,6 +352,26 @@ function renderAchievementsView(): string {
   const unlockedCount = achievementsWithStatus.filter(a => a.isUnlocked).length;
   const totalCount = milestoneAchievements.length;
 
+  // Initialize mouse tracking after render (using a small timeout to ensure DOM exists)
+  setTimeout(() => {
+    const cards = document.querySelectorAll('.achievement-card');
+    cards.forEach((card) => {
+      card.addEventListener('mousemove', (e: any) => {
+        const rect = card.getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        const y = ((e.clientY - rect.top) / rect.height) * 2 - 1;
+        
+        (card as HTMLElement).style.setProperty('--pointer-x', x.toFixed(2));
+        (card as HTMLElement).style.setProperty('--pointer-y', y.toFixed(2));
+        (card as HTMLElement).style.setProperty('--card-opacity', '1');
+      });
+
+      card.addEventListener('mouseleave', () => {
+        (card as HTMLElement).style.setProperty('--card-opacity', '0.15');
+      });
+    });
+  }, 100);
+
   return `
     <div class="achievements-container">
       <div class="achievements-header">
@@ -381,29 +401,29 @@ function renderAchievementsView(): string {
       <div class="achievements-grid">
         ${achievementsWithStatus.map(achievement => `
           <div class="achievement-card ${achievement.isUnlocked ? 'unlocked' : 'locked'}">
-            <div class="achievement-icon-container">
-              <div class="achievement-icon ${achievement.isUnlocked ? 'unlocked' : ''}">${achievement.icon}</div>
-              ${achievement.isUnlocked ? '<div class="unlock-badge">✓</div>' : ''}
-            </div>
+            <!-- Dynamic Glow Layer -->
+            <div class="card-glow-layer"></div>
+            
+            <!-- Blurred Background Icon -->
+            <div class="bg-icon">${achievement.icon}</div>
 
-            <div class="achievement-content">
+            <!-- Main Content -->
+            <div class="card-content">
+              <div class="achievement-icon">${achievement.icon}</div>
               <h3 class="achievement-name">${achievement.name}</h3>
               <p class="achievement-description">${achievement.description}</p>
-
-              ${!achievement.isUnlocked ? `
-                <div class="achievement-progress">
-                  <div class="progress-bar">
-                    <div class="progress-fill" style="width: ${achievement.progress}%"></div>
+              
+              ${achievement.isUnlocked 
+                ? `<div class="status-badge unlocked">Unlocked</div>` 
+                : `
+                  <div class="card-progress">
+                    <div class="card-progress-fill" style="width: ${achievement.progress}%"></div>
                   </div>
-                  <div class="progress-text">
+                  <div class="progress-text" style="margin-top: 8px; font-size: 10px; opacity: 0.7;">
                     ${formatNumber(totalKeystrokes)} / ${formatNumber(achievement.threshold)}
                   </div>
-                </div>
-              ` : `
-                <div class="achievement-unlocked">
-                  <span class="unlock-text">Unlocked!</span>
-                </div>
-              `}
+                  `
+              }
             </div>
           </div>
         `).join('')}
