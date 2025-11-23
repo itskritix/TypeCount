@@ -367,6 +367,32 @@ class CloudSyncService {
   updateConfig(newConfig: Partial<CloudSyncConfig>): void {
     this.config = { ...this.config, ...newConfig };
   }
+
+  // Diagnostic: Check connection to Supabase
+  async checkConnection(): Promise<{ success: boolean; error?: any }> {
+    if (!this.supabase) {
+      return { success: false, error: 'Supabase client not initialized' };
+    }
+
+    try {
+      // Try to hit the table. Even a 401/403 error means we Connected to the server.
+      const { count, error } = await this.supabase
+        .from('user_typing_data')
+        .select('*', { count: 'exact', head: true });
+
+      if (error) {
+        // 42501 means "Permission Denied" (RLS), which means we DID connect and the table DOES exist!
+        if (error.code === '42501') {
+          return { success: true }; 
+        }
+        return { success: false, error };
+      }
+
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err };
+    }
+  }
 }
 
 // Singleton instance

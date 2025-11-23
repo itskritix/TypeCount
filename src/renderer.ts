@@ -166,10 +166,22 @@ function createDashboard() {
     <div class="title-bar-drag-region"></div>
 
     <div class="container">
-      <header class="main-header">
-        <div class="header-content">
+      <header class="main-header" style="display: flex; justify-content: space-between; align-items: flex-end;">
+        <div class="header-content" style="margin-bottom: 0;">
           <h1 class="app-title">TypeCount</h1>
           <p class="app-description">Track your typing productivity and build better habits</p>
+        </div>
+        
+        <!-- Gamification Header -->
+        <div class="user-level-container" style="text-align: right; min-width: 250px;">
+          <div class="level-info" style="margin-bottom: 0.5rem;">
+            <span class="level-badge" style="background: var(--accent-primary); color: white; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 0.8rem;">LVL <span id="user-level">1</span></span>
+            <span class="xp-text" style="font-size: 0.9rem; color: var(--text-secondary); margin-left: 8px;"><span id="user-xp">0</span> XP</span>
+          </div>
+          <div class="xp-progress-bar" style="width: 100%; height: 6px; background: var(--bg-surface-hover); border-radius: 3px; overflow: hidden; position: relative;">
+            <div id="xp-fill" style="height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary)); transition: width 0.5s ease;"></div>
+          </div>
+          <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Next Level: <span id="next-level-xp">1000</span> XP</div>
         </div>
       </header>
 
@@ -441,7 +453,11 @@ function updateUI() {
     const elements = {
       totalEl: document.getElementById('total-count'),
       todayEl: document.getElementById('today-count'),
-      streakEl: document.getElementById('streak-count')
+      streakEl: document.getElementById('streak-count'),
+      levelEl: document.getElementById('user-level'),
+      xpEl: document.getElementById('user-xp'),
+      xpFillEl: document.getElementById('xp-fill'),
+      nextLevelEl: document.getElementById('next-level-xp')
     };
 
     // Update metrics
@@ -449,9 +465,24 @@ function updateUI() {
     if (elements.todayEl) elements.todayEl.textContent = formatNumber(todayKeystrokes);
     if (elements.streakEl) elements.streakEl.textContent = `${streakDays}`;
 
+    // Update Level & XP
+    if (elements.levelEl) elements.levelEl.textContent = `${userLevel}`;
+    if (elements.xpEl) elements.xpEl.textContent = formatNumber(userXP);
+    
+    // Calculate XP Progress (simplified logic to match UI needs)
+    // Next level XP = (level)^2 * 1000
+    const nextLevelXP = Math.pow(userLevel, 2) * 1000;
+    const prevLevelXP = Math.pow(userLevel - 1, 2) * 1000;
+    const levelProgress = userXP - prevLevelXP;
+    const levelTotal = nextLevelXP - prevLevelXP;
+    const progressPercent = Math.min(Math.max((levelProgress / levelTotal) * 100, 0), 100);
+
+    if (elements.xpFillEl) elements.xpFillEl.style.width = `${progressPercent}%`;
+    if (elements.nextLevelEl) elements.nextLevelEl.textContent = formatNumber(nextLevelXP);
+
     // Log missing critical elements
     const missingElements = Object.entries(elements)
-      .filter(([_, element]) => !element)
+      .filter(([key, element]) => !element && ['totalEl', 'todayEl'].includes(key)) // Only warn for critical
       .map(([key]) => key);
 
     if (missingElements.length > 0) {
@@ -472,163 +503,203 @@ function updateUI() {
 }
 
 
-// Render settings view
+// Settings View Logic
+let authMode: 'login' | 'register' = 'login';
+
+function toggleAuthMode(mode: 'login' | 'register') {
+  authMode = mode;
+  renderAnalytics(); // Re-render to show new form state
+}
+
 function renderSettingsView(): string {
   return `
-    <div class="settings-container">
+    <div class="settings-layout">
       <div class="settings-header">
         <div class="header-content">
           <h2 class="settings-title">Settings</h2>
-          <p class="settings-description">Manage your preferences and account settings</p>
+          <p class="settings-description">Manage your account and preferences</p>
         </div>
       </div>
 
-      <!-- Cloud Sync Card -->
-      <div class="settings-card">
-        <div class="card-header">
-          <div class="card-title-section">
-            <h3 class="card-title">Cloud Sync</h3>
-            <p class="card-description">Sync your typing data across devices securely</p>
-          </div>
-          <div class="connection-status ${isSignedIn ? 'connected' : 'disconnected'}">
-            <div class="status-indicator"></div>
-            <span class="status-text">${isSignedIn ? 'Connected' : 'Disconnected'}</span>
-          </div>
+      ${isSignedIn ? renderSignedInView() : renderSignedOutView()}
+      
+      <!-- General Settings -->
+      <div class="cyber-card">
+        <h3><span>⚙️</span> General</h3>
+        <div class="setting-toggle-row">
+          <span class="cyber-label">Share Analytics</span>
+          <label class="toggle-switch">
+            <input type="checkbox" ${localStorage.getItem('typecount-analytics-enabled') === 'true' ? 'checked' : ''} onchange="toggleAnalytics(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
         </div>
-
-        <div class="card-content">
-          ${!isSignedIn ? `
-            <div class="auth-container">
-              <div class="auth-header">
-                <h4>Sign in to enable cloud sync</h4>
-                <p>Securely backup and sync your typing data across all your devices</p>
-              </div>
-
-              <form id="auth-form" class="auth-form" onsubmit="handleAuth(event)">
-                <div class="form-field">
-                  <label class="field-label" for="auth-email">Email address</label>
-                  <input
-                    type="email"
-                    id="auth-email"
-                    class="field-input"
-                    required
-                    placeholder="Enter your email"
-                    autocomplete="email"
-                  >
-                </div>
-
-                <div class="form-field">
-                  <label class="field-label" for="auth-password">Password</label>
-                  <input
-                    type="password"
-                    id="auth-password"
-                    class="field-input"
-                    required
-                    placeholder="Enter your password"
-                    autocomplete="current-password"
-                  >
-                </div>
-
-                <button type="submit" class="auth-button" id="auth-submit">
-                  <span class="btn-content">
-                    <span class="btn-text">Sign In</span>
-                    <span class="btn-loading hidden">Signing in...</span>
-                  </span>
-                </button>
-
-                <input type="hidden" id="auth-mode" value="signin">
-              </form>
-
-            </div>
-          ` : `
-            <div class="sync-dashboard">
-              <div class="account-info">
-                <div class="user-avatar">
-                  <div class="avatar-icon">${currentUser?.email?.charAt(0).toUpperCase() || 'U'}</div>
-                </div>
-                <div class="user-details">
-                  <h4 class="user-email">${currentUser?.email || 'Unknown User'}</h4>
-                  <p class="user-status">Account active</p>
-                </div>
-              </div>
-
-              <div class="sync-settings">
-                <div class="setting-row">
-                  <div class="setting-info">
-                    <h5>Automatic Sync</h5>
-                    <p>Automatically backup your data to the cloud</p>
-                  </div>
-                  <label class="toggle-switch">
-                    <input type="checkbox" ${cloudSyncEnabled ? 'checked' : ''} onchange="toggleCloudSync(this.checked)">
-                    <span class="toggle-slider"></span>
-                  </label>
-                </div>
-
-                ${cloudSyncEnabled ? `
-                  <div class="setting-row">
-                    <div class="setting-info">
-                      <h5>Sync Frequency</h5>
-                      <p>How often to sync your data</p>
-                    </div>
-                    <select class="setting-select" id="sync-interval" onchange="updateSyncInterval(this.value)">
-                      <option value="1" ${cloudSyncConfig.syncInterval === 1 ? 'selected' : ''}>Every hour</option>
-                      <option value="6" ${cloudSyncConfig.syncInterval === 6 ? 'selected' : ''}>Every 6 hours</option>
-                      <option value="24" ${cloudSyncConfig.syncInterval === 24 ? 'selected' : ''}>Daily</option>
-                      <option value="168" ${cloudSyncConfig.syncInterval === 168 ? 'selected' : ''}>Weekly</option>
-                    </select>
-                  </div>
-                ` : ''}
-
-                ${cloudSyncConfig.lastSync ? `
-                  <div class="sync-status-info">
-                    <span class="sync-label">Last synced</span>
-                    <span class="sync-time">${new Date(cloudSyncConfig.lastSync).toLocaleString()}</span>
-                  </div>
-                ` : ''}
-              </div>
-
-              <div class="sync-actions">
-                <button class="action-button primary" onclick="manualSync()">
-                  <span class="button-icon">↻</span>
-                  Sync Now
-                </button>
-                <button class="action-button secondary" onclick="backupData()">
-                  <span class="button-icon">💾</span>
-                  Backup
-                </button>
-                <button class="action-button secondary" onclick="showRestoreModal()">
-                  <span class="button-icon">📥</span>
-                  Restore
-                </button>
-              </div>
-
-              <div class="account-footer">
-                <button class="sign-out-button" onclick="signOut()">Sign Out</button>
-              </div>
-            </div>
-          `}
+        <div class="setting-toggle-row">
+          <span class="cyber-label" style="color: #ef4444;">Reset All Data</span>
+          <button class="cyber-button danger" style="width: auto; padding: 0.4rem 1rem; font-size: 0.8rem;" onclick="showResetDataModal()">Reset</button>
         </div>
       </div>
     </div>
   `;
 }
 
-// Cloud sync authentication functions (simplified to signin only)
+function renderSignedInView() {
+  return `
+    <div class="cyber-card">
+      <h3><span>☁️</span> Cloud Sync</h3>
+      
+      <div class="user-profile-row">
+        <div class="avatar-circle">
+          ${currentUser?.email?.charAt(0).toUpperCase() || 'U'}
+        </div>
+        <div class="profile-info">
+          <h4>${currentUser?.email || 'User'}</h4>
+          <div class="status-badge"><div class="status-dot"></div> Online & Syncing</div>
+        </div>
+      </div>
+
+      <div class="sync-stats-row">
+        <span>Last Sync: ${cloudSyncConfig.lastSync ? new Date(cloudSyncConfig.lastSync).toLocaleTimeString() : 'Never'}</span>
+        <span>ID: ${currentUser?.id?.substr(0, 8)}...</span>
+      </div>
+
+      <div class="setting-toggle-row">
+        <div>
+          <span class="cyber-label">Auto-Sync</span>
+          <span class="cyber-desc">Backup automatically</span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" ${cloudSyncEnabled ? 'checked' : ''} onchange="toggleCloudSync(this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      ${cloudSyncEnabled ? `
+        <div class="input-group">
+          <label>Sync Frequency</label>
+          <select class="cyber-select" onchange="updateSyncInterval(this.value)">
+            <option value="1" ${cloudSyncConfig.syncInterval === 1 ? 'selected' : ''}>Every Hour</option>
+            <option value="6" ${cloudSyncConfig.syncInterval === 6 ? 'selected' : ''}>Every 6 Hours</option>
+            <option value="24" ${cloudSyncConfig.syncInterval === 24 ? 'selected' : ''}>Daily</option>
+          </select>
+        </div>
+      ` : ''}
+
+      <div class="sync-actions-grid">
+        <button class="cyber-button primary" onclick="manualSync()"><span>↻ Sync</span></button>
+        <button class="cyber-button secondary" onclick="backupData()"><span>💾 Backup</span></button>
+        <button class="cyber-button secondary" onclick="showRestoreModal()"><span>📥 Restore</span></button>
+      </div>
+
+      <div style="margin-top: 1.5rem; border-top: 1px solid var(--border-subtle); padding-top: 1rem;">
+        <button class="cyber-button danger" onclick="signOut()">Sign Out</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderSignedOutView() {
+  const isLogin = authMode === 'login';
+  
+  return `
+    <div class="cyber-card">
+      <h3><span>🔐</span> ${isLogin ? 'Welcome Back' : 'Create Account'}</h3>
+      <p class="cyber-desc" style="margin-bottom: 1.5rem;">
+        ${isLogin ? 'Sign in to sync your stats.' : 'Join now to backup your progress. No email verification needed.'}
+      </p>
+
+      <form id="auth-form" onsubmit="handleAuth(event)">
+        <div class="input-group">
+          <label>Email</label>
+          <input type="email" name="auth-email" class="cyber-input" placeholder="user@example.com" required autocomplete="username">
+        </div>
+        
+        <div class="input-group">
+          <label>Password</label>
+          <input type="password" name="auth-password" class="cyber-input" placeholder="••••••••" required autocomplete="current-password">
+        </div>
+
+        <button type="submit" class="cyber-button primary" id="auth-submit">
+          <span class="btn-content">
+            <span class="btn-text">${isLogin ? 'Log In' : 'Create Account'}</span>
+            <span class="btn-loading hidden">Processing...</span>
+          </span>
+        </button>
+        
+        <div class="auth-mode-switch">
+          ${isLogin ? "Don't have an account? " : "Already have an account? "}
+          <span class="auth-link" onclick="toggleAuthMode('${isLogin ? 'register' : 'login'}')">
+            ${isLogin ? 'Create one' : 'Log in'}
+          </span>
+        </div>
+      </form>
+    </div>
+  `;
+}
+
+// Cloud sync authentication functions
 function showAuthTab(mode: 'signin' | 'signup') {
-  // Function kept for compatibility but only handles signin now
+  // Function kept for compatibility
   return;
+}
+
+// Supabase Configuration (Loaded from Environment Variables)
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY as string;
+
+// Diagnostic function to verify Supabase connection & schema
+async function testConnection() {
+  console.log('🔍 Testing Supabase connection...');
+  
+  try {
+    // Initialize first if needed (using hardcoded env vars)
+    if (!cloudSync.isEnabled()) {
+        await cloudSync.initialize({
+            enabled: true,
+            supabaseUrl: SUPABASE_URL,
+            supabaseKey: SUPABASE_KEY,
+            autoSync: true
+        });
+    }
+
+    const result = await cloudSync.checkConnection();
+
+    if (result.success) {
+      console.log('✅ Supabase Connection Successful! Table "user_typing_data" is reachable.');
+      return true;
+    } else {
+      const error = result.error;
+      console.error('❌ Connection Test Failed:', error);
+      
+      if (error?.code === 'PGRST301' || error?.message?.includes('does not exist')) {
+        showNotification('⚠️ Error: Table "user_typing_data" missing! Run the SQL script.');
+      } else if (error?.code === '42501') {
+        console.log('✅ Supabase Connected (RLS Active - Login required to see data).');
+        return true; // Connected, just need to login
+      } else {
+        showNotification(`⚠️ Connection Error: ${error?.message || 'Unknown error'}`);
+      }
+      return false;
+    }
+  } catch (err) {
+    console.error('❌ Critical Network Error:', err);
+    showNotification('❌ Critical: Cannot reach Supabase URL');
+    return false;
+  }
 }
 
 async function handleAuth(event: Event) {
   event.preventDefault();
+  
+  // Run diagnostics first
+  await testConnection();
 
   const form = event.target as HTMLFormElement;
   const formData = new FormData(form);
   const email = formData.get('auth-email') as string;
   const password = formData.get('auth-password') as string;
-
+  
   if (!email || !password) {
-    showNotification('Please fill in all fields');
+    showNotification('Please fill in email and password');
     return;
   }
 
@@ -643,24 +714,37 @@ async function handleAuth(event: Event) {
       btnLoading.classList.remove('hidden');
     }
 
-    // Initialize cloud sync with dummy config for demo
+    // Initialize cloud sync with hardcoded config
     const success = await cloudSync.initialize({
       enabled: true,
-      supabaseUrl: 'https://your-project.supabase.co', // Replace with actual URL
-      supabaseKey: 'your-anon-key', // Replace with actual key
+      supabaseUrl: SUPABASE_URL,
+      supabaseKey: SUPABASE_KEY,
       autoSync: true,
       syncInterval: 24
     });
 
     if (!success) {
-      throw new Error('Failed to initialize cloud sync');
+      throw new Error('Failed to connect to sync server.');
     }
 
-    // Attempt signin only
-    const result = await cloudSync.signIn(email, password);
+    let result;
+
+    if (authMode === 'register') {
+      // Explicit Sign Up Flow
+      console.log('Creating new account...');
+      result = await cloudSync.signUp(email, password);
+      
+      if (result.user) {
+        showNotification('✨ Account created successfully!');
+      }
+    } else {
+      // Explicit Login Flow
+      console.log('Logging in...');
+      result = await cloudSync.signIn(email, password);
+    }
 
     if (result.error) {
-      throw new Error(result.error.message || 'Authentication failed');
+      throw result.error;
     }
 
     if (result.user) {
@@ -668,7 +752,7 @@ async function handleAuth(event: Event) {
       isSignedIn = true;
       cloudSyncEnabled = true;
 
-      showNotification('Successfully signed in!');
+      showNotification(authMode === 'login' ? '👋 Welcome back!' : '✨ Welcome!');
 
       // Refresh settings view
       if (currentView === 'settings') {
@@ -680,7 +764,11 @@ async function handleAuth(event: Event) {
     }
   } catch (error: any) {
     console.error('Authentication error:', error);
-    showNotification(`${error.message || 'Authentication failed'}`);
+    console.log('Full error details:', JSON.stringify(error, null, 2));
+    
+    // Try to extract the most useful message
+    const msg = error.message || error.error_description || error.msg || 'Connection failed';
+    showNotification(`Error: ${msg}`);
   } finally {
     // Reset loading state
     if (btnText && btnLoading) {
@@ -1002,29 +1090,38 @@ function toggleAnalytics(enabled: boolean) {
 
 // Initialize cloud sync on app start
 async function initializeCloudSync() {
+  console.log('🚀 Initializing Cloud Sync...');
+  console.log('URL:', SUPABASE_URL ? 'Set' : 'Missing');
+  console.log('Key:', SUPABASE_KEY ? 'Set' : 'Missing');
+
+  if (!SUPABASE_URL || !SUPABASE_KEY || SUPABASE_URL.includes('YOUR_NEW')) {
+    console.warn('⚠️ Supabase credentials missing or default in .env');
+    return;
+  }
+
   try {
-    // Check for existing cloud sync configuration
-    const storedConfig = localStorage.getItem('typecount-cloud-config');
-    if (storedConfig) {
-      cloudSyncConfig = JSON.parse(storedConfig);
+    const success = await cloudSync.initialize({
+      enabled: true,
+      supabaseUrl: SUPABASE_URL,
+      supabaseKey: SUPABASE_KEY,
+      autoSync: true,
+      syncInterval: 24
+    });
 
-      if (cloudSyncConfig.enabled) {
-        const success = await cloudSync.initialize(cloudSyncConfig);
+    if (success) {
+      console.log('✅ Cloud Sync Service Ready');
+      isSignedIn = cloudSync.isAuthenticated();
+      currentUser = cloudSync.getCurrentUser();
+      cloudSyncEnabled = true;
 
-        if (success) {
-          isSignedIn = cloudSync.isAuthenticated();
-          currentUser = cloudSync.getCurrentUser();
-          cloudSyncEnabled = cloudSyncConfig.enabled;
-
-          // Auto-sync if needed and enabled
-          if (cloudSyncEnabled && cloudSync.shouldSync()) {
-            setTimeout(() => manualSync(), 2000);
-          }
-        }
+      if (cloudSyncEnabled && cloudSync.shouldSync()) {
+        setTimeout(() => manualSync(), 2000);
       }
+    } else {
+      console.error('❌ Cloud Sync failed to initialize (Check console)');
     }
   } catch (error) {
-    console.warn('Failed to initialize cloud sync:', error);
+    console.warn('❌ Failed to initialize cloud sync:', error);
   }
 }
 
@@ -1306,6 +1403,7 @@ window.electronAPI.requestData();
 (window as any).createNewGoal = createNewGoal;
 (window as any).showAuthTab = showAuthTab;
 (window as any).handleAuth = handleAuth;
+(window as any).toggleAuthMode = toggleAuthMode;
 (window as any).signOut = signOut;
 (window as any).manualSync = manualSync;
 (window as any).backupData = backupData;
