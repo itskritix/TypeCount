@@ -26,15 +26,14 @@ let uIOhook: UiohookNapi | null = null;
 let UiohookKey: typeof import('uiohook-napi').UiohookKey | null = null;
 let isNativeModuleAvailable = false;
 
-// Secure native module loading with integrity validation
+// Secure native module loading
 function loadNativeModuleSecurely(): boolean {
   try {
     if (app.isPackaged) {
       const nativeModulePath = path.join(process.resourcesPath, 'uiohook_napi.node');
 
-      // Verify file exists and validate properties
       if (!fs.existsSync(nativeModulePath)) {
-        console.error(' Native module not found at expected location:', nativeModulePath);
+        console.error(' Native module not found:', nativeModulePath);
         return false;
       }
 
@@ -197,7 +196,7 @@ let tray: Tray | null = null;
 let isQuitting = false;
 let keystrokeCount = 0;
 
-// Timer management system to prevent memory leaks
+// Timer management to prevent leaks
 class TimerManager {
   private timers = new Set<NodeJS.Timeout>();
   private intervals = new Set<NodeJS.Timeout>();
@@ -252,12 +251,12 @@ class KeystrokeTracker {
   private batchedUpdates = 0;
   private isOverloaded = false;
 
-  // Rate limiting configuration (based on research: world record = 25/sec, systems handle 1000/sec)
-  private readonly MAX_EVENTS_PER_SECOND = 500; // Max 500 events/second (20x world record)
-  private readonly MIN_EVENT_INTERVAL = 1000 / this.MAX_EVENTS_PER_SECOND; // 2ms interval
-  private readonly OVERLOAD_THRESHOLD = 1000; // Circuit breaker at 1000 events/second (industry standard)
-  private readonly BATCH_SIZE = 25; // Batch every 25 keystrokes (1 second at world record pace)
-  private readonly UPDATE_DEBOUNCE_MS = 100; // Faster UI updates (100ms vs 250ms)
+  // Rate limiting: Max 500 events/sec (20x world record)
+  private readonly MAX_EVENTS_PER_SECOND = 500;
+  private readonly MIN_EVENT_INTERVAL = 1000 / this.MAX_EVENTS_PER_SECOND;
+  private readonly OVERLOAD_THRESHOLD = 1000;
+  private readonly BATCH_SIZE = 25;
+  private readonly UPDATE_DEBOUNCE_MS = 100;
 
   // Timers for batching and debouncing
   private batchUpdateTimer: NodeJS.Timeout | null = null;
@@ -291,14 +290,14 @@ class KeystrokeTracker {
   private handleKeystroke = (e: UiohookKeyboardEvent) => {
     const now = Date.now();
 
-    // Rate limiting: Check if we're receiving events too rapidly
+    // Rate limiting check
     if (now - this.lastEventTime < this.MIN_EVENT_INTERVAL) {
       this.eventCount++;
 
-      // Circuit breaker: If overwhelming, temporarily throttle
+      // Circuit breaker throttle
       if (this.eventCount > this.OVERLOAD_THRESHOLD) {
         if (!this.isOverloaded) {
-          console.warn('⚠️  Keystroke rate too high, activating circuit breaker');
+          console.warn(' Keystroke rate too high, activating circuit breaker');
           this.isOverloaded = true;
         }
         return;
@@ -352,35 +351,18 @@ class KeystrokeTracker {
     if (this.batchedUpdates === 0) return;
 
     try {
-      // FIXED: Store all critical data atomically
-      const today = new Date().toISOString().split('T')[0];
-
-      // Primary storage operations
+      const today = getLocalDateString();
       store.set('totalKeystrokes', this.cachedStats.total);
       store.set(`dailyKeystrokes.${today}`, this.cachedStats.today);
-
-      // Backward compatibility - handle gracefully if it fails
-      try {
-        const existingDailyData = store.get('dailyKeystrokeData') || {};
-        if (!existingDailyData[today] || existingDailyData[today] !== this.cachedStats.today) {
-          existingDailyData[today] = this.cachedStats.today;
-          store.set('dailyKeystrokeData', existingDailyData);
-        }
-      } catch (legacyError) {
-        console.warn('⚠️ Legacy data structure update failed (non-critical):', legacyError);
-      }
 
       this.batchedUpdates = 0;
       this.cachedStats.lastUpdate = Date.now();
 
-      // Check and update streak
       updateStreak();
       this.cachedStats.streak = store.get('streakDays') || 0;
-
-      // FIXED: Clean up timer safely
       this.clearBatchTimer();
     } catch (error) {
-      console.error('❌ Error flushing batched updates:', error);
+      console.error('Error flushing updates:', error);
     }
   }
 
@@ -480,30 +462,29 @@ class KeystrokeTracker {
   }
 
   private showWelcomeNotification() {
-    // Don't show multiple welcome notifications
+    // Prevent duplicate welcome notifications
     if (store.get('hasShownWelcomeNotification')) return;
 
     console.log('🎉 TypeCount: First keystroke detected! App is now tracking.');
 
-    // FIXED: Always set the flag first to prevent duplicate calls
     store.set('hasShownWelcomeNotification', true);
 
     // Show system notification on supported platforms
     if (Notification && process.platform !== 'linux') {
       timerManager.addTimeout(() => {
         try {
-          new Notification('TypeCount Started! 🎉', {
+          new Notification('TypeCount Started! ', {
             body: 'Your first keystroke is tracked! Check the menu bar to see your progress.',
             icon: getAppIconPath(),
             silent: true
           });
         } catch (error) {
-          console.log('💡 TypeCount is now tracking your keystrokes! Check the menu bar.');
+          console.log(' TypeCount is now tracking your keystrokes! Check the menu bar.');
         }
       }, 100); // Small delay to ensure UI is ready
     } else {
       // Fallback for platforms without notifications (including Linux)
-      console.log('💡 TypeCount is now tracking your keystrokes! Check the menu bar.');
+      console.log(' TypeCount is now tracking your keystrokes! Check the menu bar.');
 
       // For Linux users, create a more visible console message
       if (process.platform === 'linux') {
@@ -581,6 +562,14 @@ const stopKeystrokeTracking = () => {
 };
 
 
+// Helper function to get local date in YYYY-MM-DD format (not UTC)
+const getLocalDateString = (date: Date = new Date()): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const getTodayKeystrokes = () => {
   // Use cached value if available, fallback to store only if needed
   if (keystrokeTracker) {
@@ -588,18 +577,18 @@ const getTodayKeystrokes = () => {
   }
 
   // Fallback for initialization
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateString();
   return store.get('dailyKeystrokes')[today] || 0;
 };
 
 const updateStreak = () => {
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateString();
   const lastActive = store.get('lastActiveDate');
 
   if (lastActive !== today) {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const yesterdayStr = getLocalDateString(yesterday);
 
     if (lastActive === yesterdayStr) {
       const newStreak = store.get('streakDays') + 1;
@@ -712,7 +701,7 @@ const createWidget = () => {
 
   widgetWindow = new BrowserWindow({
     width: 240,
-    height: 150, // Increased height for 3-tier layout
+    height: 150,
     x: widgetPosition?.x || 50,
     y: widgetPosition?.y || 50,
     frame: false,
@@ -727,8 +716,9 @@ const createWidget = () => {
     focusable: false,
     type: isMac ? 'desktop' : 'toolbar',
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
     }
   });
 
@@ -992,9 +982,8 @@ const createWidget = () => {
           return (num / 1000000).toFixed(1) + 'M';
         };
 
-        const { ipcRenderer } = require('electron');
-        ipcRenderer.on('widget-update', (event, data) => updateWidget(data));
-        ipcRenderer.send('widget-request-data');
+        window.electronAPI.onKeystrokeUpdate(updateWidget);
+        window.electronAPI.requestData();
       </script>
     </body>
     </html>
@@ -1026,8 +1015,7 @@ const destroyWidget = () => {
 
 const updateWidget = () => {
   if (widgetWindow && !widgetWindow.isDestroyed() && keystrokeTracker) {
-    // Use cached data instead of expensive store operations
-    widgetWindow.webContents.send('widget-update', {
+    widgetWindow.webContents.send('keystroke-update', {
       total: keystrokeTracker.cachedStats.total,
       today: keystrokeTracker.cachedStats.today
     });
@@ -1065,11 +1053,11 @@ const getWeekStart = (date: Date): string => {
   const diff = d.getDate() - day; // adjust when day is Sunday
   d.setDate(diff);
   d.setHours(0, 0, 0, 0);
-  return d.toISOString().split('T')[0];
+  return getLocalDateString(d);
 };
 
 const updateChallengesAndGoals = () => {
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateString();
   const todayKeystrokes = getTodayKeystrokes();
 
   // Update daily goals
@@ -1122,7 +1110,7 @@ const updateChallengesAndGoals = () => {
         for (let i = 0; i < 7; i++) {
           const checkDate = new Date(weekStart);
           checkDate.setDate(weekStart.getDate() + i);
-          const dateStr = checkDate.toISOString().split('T')[0];
+          const dateStr = getLocalDateString(checkDate);
 
           if (checkDate <= new Date()) {
             currentWeekData.push(store.get('dailyKeystrokes')[dateStr] || 0);
@@ -1148,17 +1136,8 @@ const updateChallengesAndGoals = () => {
       }
 
       const completed = progress >= challenge.target;
-      if (completed && !challenge.completed) {
-        // Award XP for completing challenge
-        const currentXP = store.get('userXP');
-        const xpReward = parseInt(challenge.reward?.replace(' XP', '') || '0');
-        store.set('userXP', currentXP + xpReward);
-        store.set('userLevel', calculateLevel(currentXP + xpReward));
-
-        // Show achievement notification
-        if (mainWindow) {
-          mainWindow.webContents.send('challenge-completed', challenge);
-        }
+      if (completed && !challenge.completed && mainWindow) {
+        mainWindow.webContents.send('challenge-completed', { ...challenge, completed: true });
       }
 
       return { ...challenge, progress, completed };
@@ -1206,7 +1185,7 @@ const updateChallengesAndGoals = () => {
       for (let day = 0; day < 7; day++) {
         const date = new Date(weekStartDate);
         date.setDate(date.getDate() + day);
-        const dateStr = date.toISOString().split('T')[0];
+        const dateStr = getLocalDateString(date);
         weekTotal += dailyData[dateStr] || 0;
       }
       weeklyTotals.push(weekTotal);
@@ -1421,12 +1400,24 @@ const createTray = () => {
     }
   });
 
+  let lastTotalCount = 0;
+  let lastTodayCount = 0;
+  let lastStreakDays = 0;
+
   timerManager.addInterval(() => {
     updateTrayDisplay();
 
     const totalCount = keystrokeTracker?.cachedStats.total ?? store.get('totalKeystrokes');
     const todayCount = keystrokeTracker?.cachedStats.today ?? getTodayKeystrokes();
     const streakDays = keystrokeTracker?.cachedStats.streak ?? store.get('streakDays');
+
+    if (totalCount === lastTotalCount && todayCount === lastTodayCount && streakDays === lastStreakDays) {
+      return;
+    }
+
+    lastTotalCount = totalCount;
+    lastTodayCount = todayCount;
+    lastStreakDays = streakDays;
 
     const updatedMenu = Menu.buildFromTemplate([
       {
@@ -1652,22 +1643,35 @@ ipcMain.on('create-goal', (event, goalData) => {
   });
 });
 
-// IPC handler for updating user data (e.g., from cloud sync)
 ipcMain.on('update-user-data', (event, data) => {
   try {
-    if (data.totalKeystrokes !== undefined) store.set('totalKeystrokes', data.totalKeystrokes);
-    if (data.dailyKeystrokes !== undefined) store.set('dailyKeystrokes', data.dailyKeystrokes);
-    if (data.hourlyKeystrokes !== undefined) store.set('hourlyKeystrokes', data.hourlyKeystrokes);
-    if (data.achievements !== undefined) store.set('achievements', data.achievements);
-    if (data.challenges !== undefined) store.set('challenges', data.challenges);
-    if (data.goals !== undefined) store.set('goals', data.goals);
-    if (data.userLevel !== undefined) store.set('userLevel', data.userLevel);
-    if (data.userXP !== undefined) store.set('userXP', data.userXP);
-    if (data.personalityType !== undefined) store.set('personalityType', data.personalityType);
-    if (data.streakDays !== undefined) store.set('streakDays', data.streakDays);
-    if (data.longestStreak !== undefined) store.set('longestStreak', data.longestStreak);
-    if (data.firstUsedDate !== undefined) store.set('firstUsedDate', data.firstUsedDate);
-    if (data.lastActiveDate !== undefined) store.set('lastActiveDate', data.lastActiveDate);
+    if (typeof data.totalKeystrokes === 'number' && data.totalKeystrokes >= 0) {
+      store.set('totalKeystrokes', Math.floor(data.totalKeystrokes));
+    }
+    if (data.dailyKeystrokes !== undefined && typeof data.dailyKeystrokes === 'object') {
+      store.set('dailyKeystrokes', data.dailyKeystrokes);
+    }
+    if (data.hourlyKeystrokes !== undefined && typeof data.hourlyKeystrokes === 'object') {
+      store.set('hourlyKeystrokes', data.hourlyKeystrokes);
+    }
+    if (Array.isArray(data.achievements)) store.set('achievements', data.achievements);
+    if (Array.isArray(data.challenges)) store.set('challenges', data.challenges);
+    if (Array.isArray(data.goals)) store.set('goals', data.goals);
+    if (typeof data.userLevel === 'number' && data.userLevel >= 1 && data.userLevel <= 100) {
+      store.set('userLevel', Math.floor(data.userLevel));
+    }
+    if (typeof data.userXP === 'number' && data.userXP >= 0 && isFinite(data.userXP)) {
+      store.set('userXP', Math.floor(data.userXP));
+    }
+    if (typeof data.personalityType === 'string') store.set('personalityType', data.personalityType);
+    if (typeof data.streakDays === 'number' && data.streakDays >= 0) {
+      store.set('streakDays', Math.floor(data.streakDays));
+    }
+    if (typeof data.longestStreak === 'number' && data.longestStreak >= 0) {
+      store.set('longestStreak', Math.floor(data.longestStreak));
+    }
+    if (typeof data.firstUsedDate === 'string') store.set('firstUsedDate', data.firstUsedDate);
+    if (typeof data.lastActiveDate === 'string') store.set('lastActiveDate', data.lastActiveDate);
     
     // Refresh tracker cache if it exists
     if (keystrokeTracker) {
@@ -1724,7 +1728,14 @@ const recalculateUserXP = () => {
     
     const calculatedBasicXP = keystrokeXP + achievementXP;
     
-    if (currentXP < calculatedBasicXP) {
+    // XP Sanity Check: Reset if local data is corrupt/impossible
+    const maxReasonableXP = Math.max(calculatedBasicXP * 2, calculatedBasicXP + 50000);
+
+    if (currentXP > maxReasonableXP) {
+        console.warn(`Fixing Corrupt XP: Resetting ${currentXP} to ${calculatedBasicXP}`);
+        store.set('userXP', calculatedBasicXP);
+        store.set('userLevel', calculateLevel(calculatedBasicXP));
+    } else if (currentXP < calculatedBasicXP) {
       console.log(` Fixing XP: Updated from ${currentXP} to ${calculatedBasicXP}`);
       store.set('userXP', calculatedBasicXP);
       store.set('userLevel', calculateLevel(calculatedBasicXP));

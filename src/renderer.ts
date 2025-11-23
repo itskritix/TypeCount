@@ -6,6 +6,9 @@ import {
   calculateLevel
 } from './gamification';
 import { cloudSync, CloudSyncConfig } from './cloudSync';
+import { Chart, registerables } from 'chart.js';
+
+Chart.register(...registerables);
 
 declare global {
   interface Window {
@@ -23,7 +26,7 @@ declare global {
   }
 }
 
-// Interfaces matching main.ts
+// Data Interfaces
 interface Achievement {
   id: string;
   name: string;
@@ -76,14 +79,28 @@ let personalityType = '';
 let dailyGoal = 5000;
 let weeklyGoal = 35000;
 
+// Chart state
+let productivityChart: Chart | null = null;
+let currentChartTimeframe: 'weekly' | 'monthly' | 'yearly' = 'weekly';
+
 // Current view state
 let currentView: 'insights' | 'achievements' | 'settings' = 'insights';
+let lastRenderedView: string = '';
+let lastChartRender: number = 0;
 
 // Cloud sync state
 let cloudSyncEnabled = false;
 let cloudSyncConfig: CloudSyncConfig = { enabled: false };
 let isSignedIn = false;
 let currentUser: any = null;
+
+// Helper function to get local date in YYYY-MM-DD format (not UTC)
+function getLocalDateString(date: Date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 // Format large numbers
 function formatNumber(num: number): string {
@@ -134,12 +151,12 @@ function getProductivityInsights(dailyData: Record<string, number>, hourlyData: 
   for (let i = 0; i < 7; i++) {
     const date = new Date(now);
     date.setDate(date.getDate() - i);
-    const dateStr = date.toISOString().split('T')[0];
+    const dateStr = getLocalDateString(date);
     last7Days.push(dailyData[dateStr] || 0);
 
     const prevDate = new Date(now);
     prevDate.setDate(prevDate.getDate() - i - 7);
-    const prevDateStr = prevDate.toISOString().split('T')[0];
+    const prevDateStr = getLocalDateString(prevDate);
     previous7Days.push(dailyData[prevDateStr] || 0);
   }
 
@@ -159,6 +176,149 @@ function getProductivityInsights(dailyData: Record<string, number>, hourlyData: 
     longestStreak: streakDays, // This should be longest streak from data
     currentStreak: streakDays
   };
+}
+
+// Chart Logic
+function switchChartTimeframe(timeframe: 'weekly' | 'monthly' | 'yearly') {
+  currentChartTimeframe = timeframe;
+  renderAnalytics();
+}
+
+function getChartData(timeframe: 'weekly' | 'monthly' | 'yearly') {
+  const labels: string[] = [];
+  const data: number[] = [];
+  const now = new Date();
+
+  if (timeframe === 'weekly') {
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const dateStr = getLocalDateString(d);
+      labels.push(d.toLocaleDateString(undefined, { weekday: 'short' }));
+      data.push(dailyData[dateStr] || 0);
+    }
+  } else if (timeframe === 'monthly') {
+     for (let i = 29; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const dateStr = getLocalDateString(d);
+      labels.push(d.getDate().toString());
+      data.push(dailyData[dateStr] || 0);
+    }
+  } else if (timeframe === 'yearly') {
+    for (let i = 11; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const monthName = d.toLocaleDateString(undefined, { month: 'short' });
+        labels.push(monthName);
+        
+        let monthTotal = 0;
+        const year = d.getFullYear();
+        const month = d.getMonth();
+        
+        Object.entries(dailyData).forEach(([dateStr, count]) => {
+            const [entryYear, entryMonth] = dateStr.split('-').map(Number);
+            if (entryYear === year && entryMonth - 1 === month) {
+                monthTotal += count;
+            }
+        });
+        data.push(monthTotal);
+    }
+  }
+
+  return { labels, data };
+}
+
+function renderProductivityChart() {
+  const ctx = document.getElementById('productivityChart') as HTMLCanvasElement;
+  if (!ctx) return;
+
+  if (productivityChart) {
+    productivityChart.destroy();
+  }
+
+  const { labels, data } = getChartData(currentChartTimeframe);
+
+  // Determine grid color based on theme
+  const gridColor = 'rgba(255, 255, 255, 0.05)';
+  const textColor = '#71717a';
+
+  productivityChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Keystrokes',
+        data,
+        borderColor: '#06b6d4', // Cyan
+        backgroundColor: (context) => {
+          const ctx = context.chart.ctx;
+          const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+          gradient.addColorStop(0, 'rgba(6, 182, 212, 0.5)');
+          gradient.addColorStop(1, 'rgba(6, 182, 212, 0.0)');
+          return gradient;
+        },
+        borderWidth: 2,
+        tension: 0.4,
+        fill: true,
+        pointBackgroundColor: '#09090b',
+        pointBorderColor: '#8b5cf6', // Violet
+        pointBorderWidth: 2,
+        pointRadius: 4,
+        pointHoverRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          backgroundColor: 'rgba(9, 9, 11, 0.95)',
+          titleColor: '#fafafa',
+          bodyColor: '#a1a1aa',
+          borderColor: 'rgba(139, 92, 246, 0.3)',
+          borderWidth: 1,
+          padding: 12,
+          displayColors: false,
+          callbacks: {
+            label: (context) => `Keystrokes: ${context.parsed.y.toLocaleString()}`
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          grid: { color: gridColor },
+          ticks: { 
+            color: textColor,
+            callback: (value) => {
+              if (typeof value === 'number') {
+                return value >= 1000 ? `${(value/1000).toFixed(1)}k` : value;
+              }
+              return value;
+            }
+          },
+          border: { display: false }
+        },
+        x: {
+          grid: { display: false },
+          ticks: { color: textColor },
+          border: { display: false }
+        }
+      },
+      interaction: {
+        mode: 'nearest',
+        axis: 'x',
+        intersect: false
+      },
+      animation: {
+        duration: 750,
+        easing: 'easeOutQuart'
+      }
+    }
+  });
 }
 
 // Create the dashboard UI
@@ -328,8 +488,26 @@ function renderInsightsView(container: HTMLElement) {
           </div>
         </div>
       </div>
+
+      <!-- Chart Section -->
+      <div class="chart-section cyber-card" style="margin-top: 2rem; padding: 1.5rem; border: 1px solid var(--border-subtle); border-radius: 12px; background: rgba(9, 9, 11, 0.4);">
+        <div class="chart-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+          <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-primary);">Typing Consistency</h3>
+          <div class="chart-controls" style="display: flex; gap: 0.5rem; background: var(--bg-surface); padding: 4px; border-radius: 8px;">
+            <button class="cyber-button small ${currentChartTimeframe === 'weekly' ? 'active' : ''}" onclick="switchChartTimeframe('weekly')" style="font-size: 0.8rem; padding: 4px 12px; min-width: 60px;">Week</button>
+            <button class="cyber-button small ${currentChartTimeframe === 'monthly' ? 'active' : ''}" onclick="switchChartTimeframe('monthly')" style="font-size: 0.8rem; padding: 4px 12px; min-width: 60px;">Month</button>
+            <button class="cyber-button small ${currentChartTimeframe === 'yearly' ? 'active' : ''}" onclick="switchChartTimeframe('yearly')" style="font-size: 0.8rem; padding: 4px 12px; min-width: 60px;">Year</button>
+          </div>
+        </div>
+        <div style="position: relative; height: 300px; width: 100%;">
+          <canvas id="productivityChart"></canvas>
+        </div>
+      </div>
     </div>
   `;
+
+  // Render chart after DOM update
+  setTimeout(() => renderProductivityChart(), 0);
 }
 
 
@@ -491,13 +669,14 @@ function updateUI() {
       console.warn('Missing UI elements:', missingElements);
     }
 
-    // Achievements view updates automatically through renderAnalytics()
-
-    // Only re-render the current analytics view if it depends on real-time data
     if (currentView === 'insights') {
-      renderAnalytics();
+      const now = Date.now();
+      if (lastRenderedView !== currentView || now - lastChartRender > 5000) {
+        lastRenderedView = currentView;
+        lastChartRender = now;
+        renderAnalytics();
+      }
     }
-    // Don't re-render forms/modals/settings that contain user input
   } catch (error) {
     console.error('Error updating UI:', error);
     showNotification('UI update failed - please refresh the page');
@@ -528,13 +707,6 @@ function renderSettingsView(): string {
       <!-- General Settings -->
       <div class="cyber-card">
         <h3><span>⚙️</span> General</h3>
-        <div class="setting-toggle-row">
-          <span class="cyber-label">Share Analytics</span>
-          <label class="toggle-switch">
-            <input type="checkbox" ${localStorage.getItem('typecount-analytics-enabled') === 'true' ? 'checked' : ''} onchange="toggleAnalytics(this.checked)">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
         <div class="setting-toggle-row">
           <span class="cyber-label" style="color: #ef4444;">Reset All Data</span>
           <button class="cyber-button danger" style="width: auto; padding: 0.4rem 1rem; font-size: 0.8rem;" onclick="showResetDataModal()">Reset</button>
@@ -666,19 +838,19 @@ async function testConnection() {
     const result = await cloudSync.checkConnection();
 
     if (result.success) {
-      console.log('✅ Supabase Connection Successful! Table "user_typing_data" is reachable.');
+      console.log(' Supabase Connection Successful! Table "user_typing_data" is reachable.');
       return true;
     } else {
       const error = result.error;
       console.error('❌ Connection Test Failed:', error);
       
       if (error?.code === 'PGRST301' || error?.message?.includes('does not exist')) {
-        showNotification('⚠️ Error: Table "user_typing_data" missing! Run the SQL script.');
+        showNotification('Error: Table "user_typing_data" missing! Run the SQL script.');
       } else if (error?.code === '42501') {
-        console.log('✅ Supabase Connected (RLS Active - Login required to see data).');
+        console.log(' Supabase Connected (RLS Active - Login required to see data).');
         return true; // Connected, just need to login
       } else {
-        showNotification(`⚠️ Connection Error: ${error?.message || 'Unknown error'}`);
+        showNotification(`Connection Error: ${error?.message || 'Unknown error'}`);
       }
       return false;
     }
@@ -822,7 +994,7 @@ async function backupData() {
       streakDays,
       longestStreak,
       firstUsedDate,
-      lastActiveDate: new Date().toISOString().split('T')[0] // Send current date as last active if backing up now
+      lastActiveDate: getLocalDateString() // Send current date as last active if backing up now
     };
 
     const result = await cloudSync.backupData(localData);
@@ -866,7 +1038,7 @@ async function manualSync() {
       streakDays,
       longestStreak,
       firstUsedDate,
-      lastActiveDate: new Date().toISOString().split('T')[0]
+      lastActiveDate: getLocalDateString()
     };
 
     const result = await cloudSync.syncData(localData);
@@ -1002,51 +1174,45 @@ async function confirmRestore() {
   }
 
   try {
-    const result = await cloudSync.restoreData();
-    if (result.success && result.data) {
-      const deviceData = result.data[parseInt(selectedDevice.value)];
+    const localData = {
+      totalKeystrokes,
+      dailyKeystrokes: dailyData,
+      hourlyKeystrokes: hourlyData,
+      achievements,
+      userLevel,
+      userXP,
+      personalityType,
+      streakDays,
+      longestStreak,
+      firstUsedDate,
+      lastActiveDate,
+      challenges,
+      goals
+    };
 
-      // Apply restored data
-      totalKeystrokes = deviceData.total_keystrokes || 0;
-      dailyData = deviceData.daily_keystrokes || {};
-      hourlyData = deviceData.hourly_keystrokes || {};
-      achievements = deviceData.achievements || [];
-      userLevel = deviceData.user_level || 1;
-      userXP = deviceData.user_xp || 0;
-      personalityType = deviceData.personality_type || '';
-      streakDays = deviceData.streak_days || 0;
-      longestStreak = deviceData.longest_streak || 0;
-      firstUsedDate = deviceData.first_used_date || new Date().toISOString();
-      const lastActiveDate = deviceData.last_active_date || new Date().toISOString().split('T')[0];
-      challenges = deviceData.challenges || [];
-      goals = deviceData.goals || [];
+    const result = await cloudSync.syncData(localData);
+    if (result.success && result.mergedData) {
+      totalKeystrokes = result.mergedData.totalKeystrokes;
+      dailyData = result.mergedData.dailyKeystrokes;
+      hourlyData = result.mergedData.hourlyKeystrokes;
+      achievements = result.mergedData.achievements;
+      userLevel = result.mergedData.userLevel;
+      userXP = result.mergedData.userXP;
+      personalityType = result.mergedData.personalityType;
+      streakDays = result.mergedData.streakDays;
+      longestStreak = result.mergedData.longestStreak;
+      firstUsedDate = result.mergedData.firstUsedDate;
+      lastActiveDate = result.mergedData.lastActiveDate;
+      challenges = result.mergedData.challenges || [];
+      goals = result.mergedData.goals || [];
 
-      // Persist to main process
-      window.electronAPI.updateUserData({
-        totalKeystrokes,
-        dailyKeystrokes: dailyData,
-        hourlyKeystrokes: hourlyData,
-        achievements,
-        userLevel,
-        userXP,
-        personalityType,
-        streakDays,
-        longestStreak,
-        firstUsedDate,
-        lastActiveDate,
-        challenges,
-        goals
-      });
-
-      // Update UI
+      window.electronAPI.updateUserData(result.mergedData);
       updateUI();
-
       hideRestoreModal();
-      showNotification(' Data restored successfully!');
+      showNotification(' Data synced successfully!');
     }
   } catch (error: any) {
-    console.error('Restore error:', error);
-    showNotification(` Restore failed: ${error.message}`);
+    showNotification(` Sync failed: ${error.message}`);
   }
 }
 
@@ -1125,7 +1291,7 @@ async function initializeCloudSync() {
   console.log('Key:', SUPABASE_KEY ? 'Set' : 'Missing');
 
   if (!SUPABASE_URL || !SUPABASE_KEY || SUPABASE_URL.includes('YOUR_NEW')) {
-    console.warn('⚠️ Supabase credentials missing or default in .env');
+    console.warn('Supabase credentials missing or default in .env');
     return;
   }
 
@@ -1139,7 +1305,7 @@ async function initializeCloudSync() {
     });
 
     if (success) {
-      console.log('✅ Cloud Sync Service Ready');
+      console.log(' Cloud Sync Service Ready');
       isSignedIn = cloudSync.isAuthenticated();
       currentUser = cloudSync.getCurrentUser();
       cloudSyncEnabled = true;
@@ -1304,7 +1470,7 @@ function getCelebrationIcon(type: string): string {
     case 'achievement': return '🏆';
     case 'challenge': return '🎯';
     case 'levelup': return '⭐';
-    default: return '🎉';
+    default: return '';
   }
 }
 
@@ -1453,4 +1619,14 @@ window.electronAPI.requestData();
 (window as any).hideCelebration = hideCelebration;
 (window as any).toggleCloudSync = toggleCloudSync;
 (window as any).updateSyncInterval = updateSyncInterval;
+(window as any).switchChartTimeframe = switchChartTimeframe;
 
+window.addEventListener('error', (event) => {
+  showNotification('An error occurred - please refresh the page');
+  event.preventDefault();
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+  showNotification('An error occurred - please refresh the page');
+  event.preventDefault();
+});

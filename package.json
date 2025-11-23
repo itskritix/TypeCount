@@ -61,6 +61,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.84.0",
     "auto-launch": "^5.0.6",
+    "chart.js": "^4.5.1",
     "electron-squirrel-startup": "^1.0.1",
     "electron-store": "^11.0.2",
     "electron-updater": "^6.6.2",

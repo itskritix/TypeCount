@@ -277,12 +277,19 @@ class CloudSyncService {
         }
       }
 
-      // Merge achievements (union)
-      const existingAchievements = new Set(mergedData.achievements || []);
+      const achievementMap = new Map<string, any>();
+
+      (mergedData.achievements || []).forEach((a: any) => {
+        const id = typeof a === 'string' ? a : a.id;
+        if (!achievementMap.has(id)) achievementMap.set(id, a);
+      });
+
       for (const achievement of deviceData.achievements || []) {
-        existingAchievements.add(achievement);
+        const id = typeof achievement === 'string' ? achievement : achievement.id;
+        if (!achievementMap.has(id)) achievementMap.set(id, achievement);
       }
-      mergedData.achievements = Array.from(existingAchievements);
+
+      mergedData.achievements = Array.from(achievementMap.values());
 
       // Use highest level and XP
       mergedData.userLevel = Math.max(mergedData.userLevel || 1, deviceData.user_level || 1);
@@ -315,16 +322,18 @@ class CloudSyncService {
           mergedData.lastActiveDate = deviceData.last_active_date;
           mergedData.streakDays = deviceData.streak_days || 0;
         } else if (cloudDate.getTime() === localDate.getTime()) {
-          // Same day activity: user might have synced a higher streak from another device today
-          // so we take the maximum to prevent accidental resets
+          // Same day: take max to prevent resets from stale devices
           mergedData.streakDays = Math.max(mergedData.streakDays || 0, deviceData.streak_days || 0);
         }
       }
     }
 
-    // Recalculate total based on merged data
-    mergedData.totalKeystrokes = Object.values(mergedData.dailyKeystrokes || {})
+    const dailySum = Object.values(mergedData.dailyKeystrokes || {})
       .reduce((sum: number, count: any) => sum + (count || 0), 0);
+
+    if (mergedData.totalKeystrokes < dailySum) {
+      mergedData.totalKeystrokes = dailySum;
+    }
 
     // --- Recalculate XP and Level ---
     // This ensures XP is consistent with stats while preserving extra XP from challenges
@@ -340,10 +349,17 @@ class CloudSyncService {
       maxReportedXP = Math.max(maxReportedXP, deviceData.user_xp || 0);
     }
 
-    // 3. Use the higher value.
-    // This fixes "0 XP" bugs (calculatedBaseXP will be > 0)
-    // And preserves Challenge XP (maxReportedXP will be > calculatedBaseXP)
-    mergedData.userXP = Math.max(calculatedBaseXP, maxReportedXP);
+    // 3. XP Sanity Check: Clamp absurdly high XP (e.g. corruption)
+    // Allow up to 2x Base XP or Base + 50k, whichever is larger.
+    const maxReasonableXP = Math.max(calculatedBaseXP * 2, calculatedBaseXP + 50000);
+    
+    if (maxReportedXP > maxReasonableXP) {
+        console.warn(`Abnormal XP (${maxReportedXP}). Resetting to sane value.`);
+        // Reset to Base XP + small buffer for unverified challenges
+        mergedData.userXP = calculatedBaseXP + Math.min(Math.max(0, maxReportedXP - calculatedBaseXP), 20000);
+    } else {
+        mergedData.userXP = Math.max(calculatedBaseXP, maxReportedXP);
+    }
 
     // 4. Update Level based on new XP
     // Level = sqrt(XP / 1000) + 1

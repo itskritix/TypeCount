@@ -38,7 +38,7 @@ interface Goal {
 // Comprehensive achievement definitions
 export const ACHIEVEMENT_DEFINITIONS = [
   // Milestone achievements
-  { id: 'first_keystroke', name: 'First Steps', description: 'Your first keystroke!', icon: '🎉', category: 'milestone', threshold: 1 },
+  { id: 'first_keystroke', name: 'First Steps', description: 'Your first keystroke!', icon: '', category: 'milestone', threshold: 1 },
   { id: 'hundred_keystrokes', name: 'Getting Started', description: 'Typed 100 keystrokes', icon: '🌱', category: 'milestone', threshold: 100 },
   { id: '1k_keystrokes', name: 'Bronze Typist', description: 'Typed 1,000 keystrokes', icon: '🥉', category: 'milestone', threshold: 1000 },
   { id: '5k_keystrokes', name: 'Active Typist', description: 'Typed 5,000 keystrokes', icon: '⚡', category: 'milestone', threshold: 5000 },
@@ -167,12 +167,12 @@ export function checkAchievements(
 ): Achievement[] {
   // Defensive programming: ensure parameters are valid
   if (typeof totalKeystrokes !== 'number' || totalKeystrokes < 0) {
-    console.warn('⚠️ Invalid totalKeystrokes for achievement check:', totalKeystrokes);
+    console.warn('Invalid totalKeystrokes for achievement check:', totalKeystrokes);
     return [];
   }
 
   if (typeof streakDays !== 'number' || streakDays < 0) {
-    console.warn('⚠️ Invalid streakDays for achievement check:', streakDays);
+    console.warn('Invalid streakDays for achievement check:', streakDays);
     return [];
   }
 
@@ -227,10 +227,10 @@ function checkTimeBasedAchievement(achievementId: string, hourlyData: Record<str
 
   switch (achievementId) {
     case 'early_bird':
-      return todayHours.slice(4, 6).some(count => count > 0); // 4-6 AM
+      return todayHours.slice(4, 6).some(count => count > 0);
 
     case 'night_owl':
-      return todayHours.slice(23).concat(todayHours.slice(0, 2)).some(count => count > 0); // 11 PM - 2 AM
+      return todayHours.slice(23).concat(todayHours.slice(0, 2)).some(count => count > 0);
 
     case 'weekend_warrior':
       const today_date = new Date();
@@ -281,12 +281,12 @@ function checkSpecialAchievement(achievementId: string, totalKeystrokes: number,
 
 // Level and XP system
 export function calculateLevel(xp: number): number {
-  // Level = sqrt(XP / 1000) + 1, capped at 100
+  // Level = sqrt(XP / 1000) + 1
   return Math.min(Math.floor(Math.sqrt(xp / 1000)) + 1, 100);
 }
 
 export function getXPForLevel(level: number): number {
-  // XP needed = (level - 1)^2 * 1000
+  // XP = (level - 1)^2 * 1000
   return Math.pow(level - 1, 2) * 1000;
 }
 
@@ -322,10 +322,10 @@ export function determinePersonalityType(hourlyData: Record<string, number[]>): 
   });
 
   // Find peak activity periods
-  const morningActivity = hourAverages.slice(6, 12).reduce((sum, count) => sum + count, 0); // 6 AM - 12 PM
-  const afternoonActivity = hourAverages.slice(12, 18).reduce((sum, count) => sum + count, 0); // 12 PM - 6 PM
-  const eveningActivity = hourAverages.slice(18, 23).reduce((sum, count) => sum + count, 0); // 6 PM - 11 PM
-  const nightActivity = hourAverages.slice(23).concat(hourAverages.slice(0, 6)).reduce((sum, count) => sum + count, 0); // 11 PM - 6 AM
+  const morningActivity = hourAverages.slice(6, 12).reduce((sum, count) => sum + count, 0);
+  const afternoonActivity = hourAverages.slice(12, 18).reduce((sum, count) => sum + count, 0);
+  const eveningActivity = hourAverages.slice(18, 23).reduce((sum, count) => sum + count, 0);
+  const nightActivity = hourAverages.slice(23).concat(hourAverages.slice(0, 6)).reduce((sum, count) => sum + count, 0);
 
   const maxActivity = Math.max(morningActivity, afternoonActivity, eveningActivity, nightActivity);
 
