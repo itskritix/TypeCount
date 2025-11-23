@@ -512,22 +512,8 @@ function renderInsightsView(container: HTMLElement) {
 
 
 
-// Render achievements view with "Cyber Glass" effect
 function renderAchievementsView(): string {
-  // Define milestone achievements with their unlock thresholds
-  const milestoneAchievements = [
-    { id: 'first_keystroke', name: 'First Steps', description: 'Type your first keystroke', threshold: 1, icon: '🌱' },
-    { id: '100_keystrokes', name: 'Getting Started', description: 'Reach 100 keystrokes', threshold: 100, icon: '🚀' },
-    { id: '1k_keystrokes', name: 'Bronze Typist', description: 'Reach 1,000 keystrokes', threshold: 1000, icon: '🥉' },
-    { id: '5k_keystrokes', name: 'Active Typist', description: 'Reach 5,000 keystrokes', threshold: 5000, icon: '⚡' },
-    { id: '10k_keystrokes', name: 'Silver Typist', description: 'Reach 10,000 keystrokes', threshold: 10000, icon: '🥈' },
-    { id: '25k_keystrokes', name: 'Dedicated Typist', description: 'Reach 25,000 keystrokes', threshold: 25000, icon: '💪' },
-    { id: '50k_keystrokes', name: 'Serious Typist', description: 'Reach 50,000 keystrokes', threshold: 50000, icon: '🎯' },
-    { id: '100k_keystrokes', name: 'Gold Typist', description: 'Reach 100,000 keystrokes', threshold: 100000, icon: '🥇' },
-    { id: '250k_keystrokes', name: 'Expert Typist', description: 'Reach 250,000 keystrokes', threshold: 250000, icon: '⭐' },
-    { id: '500k_keystrokes', name: 'Master Typist', description: 'Reach 500,000 keystrokes', threshold: 500000, icon: '💎' },
-    { id: '1m_keystrokes', name: 'Legendary Typist', description: 'Reach 1,000,000 keystrokes', threshold: 1000000, icon: '👑' }
-  ];
+  const milestoneAchievements = ACHIEVEMENT_DEFINITIONS.filter(a => a.category === 'milestone');
 
   // Check which achievements are unlocked
   const achievementsWithStatus = milestoneAchievements.map(achievement => {
@@ -1501,36 +1487,10 @@ function hideCelebration() {
 
 // Enhanced achievement notification with celebration
 function celebrateAchievement(achievement: string) {
-  const achievementNames: Record<string, string> = {
-    'first_keystroke': 'First Steps!',
-    'hundred_keystrokes': 'Getting Started!',
-    '1k_keystrokes': 'Bronze Typist!',
-    '5k_keystrokes': 'Active Typist!',
-    '10k_keystrokes': 'Silver Typist!',
-    '25k_keystrokes': 'Dedicated Typist!',
-    '50k_keystrokes': 'Serious Typist!',
-    '100k_keystrokes': 'Gold Typist!',
-    '250k_keystrokes': 'Expert Typist!',
-    '500k_keystrokes': 'Master Typist!',
-    '1m_keystrokes': 'Legendary Typist!'
-  };
+  const achievementDef = ACHIEVEMENT_DEFINITIONS.find(a => a.id === achievement);
 
-  const achievementDescriptions: Record<string, string> = {
-    'first_keystroke': 'Your journey begins!',
-    'hundred_keystrokes': 'You\'re getting the hang of this!',
-    '1k_keystrokes': 'First milestone reached!',
-    '5k_keystrokes': 'You\'re on fire!',
-    '10k_keystrokes': 'Impressive dedication!',
-    '25k_keystrokes': 'Keep up the great work!',
-    '50k_keystrokes': 'You\'re a typing machine!',
-    '100k_keystrokes': 'Amazing achievement!',
-    '250k_keystrokes': 'Expert level reached!',
-    '500k_keystrokes': 'Master of the keyboard!',
-    '1m_keystrokes': 'Legendary status achieved!'
-  };
-
-  const title = achievementNames[achievement] || 'Achievement Unlocked!';
-  const description = achievementDescriptions[achievement] || 'Keep up the great work!';
+  const title = achievementDef ? `${achievementDef.name}!` : 'Achievement Unlocked!';
+  const description = achievementDef?.description || 'Keep up the great work!';
 
   showCelebration('achievement', title, description);
 }

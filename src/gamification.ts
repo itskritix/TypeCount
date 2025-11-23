@@ -49,6 +49,7 @@ export const ACHIEVEMENT_DEFINITIONS = [
   { id: '250k_keystrokes', name: 'Expert Typist', description: 'Typed 250,000 keystrokes', icon: '🏆', category: 'milestone', threshold: 250000 },
   { id: '500k_keystrokes', name: 'Master Typist', description: 'Typed 500,000 keystrokes', icon: '👑', category: 'milestone', threshold: 500000 },
   { id: '1m_keystrokes', name: 'Legendary Typist', description: 'Typed 1,000,000 keystrokes', icon: '💎', category: 'milestone', threshold: 1000000 },
+  { id: '10m_keystrokes', name: 'Ultimate Typist', description: 'Typed 10,000,000 keystrokes', icon: '🌌', category: 'milestone', threshold: 10000000 },
 
   // Streak achievements
   { id: 'first_streak', name: 'Day One', description: 'Started your typing journey', icon: '📅', category: 'streak', threshold: 1 },
@@ -222,7 +223,14 @@ export function checkAchievements(
 }
 
 function checkTimeBasedAchievement(achievementId: string, hourlyData: Record<string, number[]>): boolean {
-  const today = new Date().toISOString().split('T')[0];
+  const getLocalDate = (date: Date = new Date()): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const today = getLocalDate();
   const todayHours = hourlyData[today] || new Array(24).fill(0);
 
   switch (achievementId) {
@@ -251,7 +259,14 @@ function checkTimeBasedAchievement(achievementId: string, hourlyData: Record<str
 }
 
 function checkSpecialAchievement(achievementId: string, totalKeystrokes: number, hourlyData: Record<string, number[]>): boolean {
-  const today = new Date().toISOString().split('T')[0];
+  const getLocalDate = (date: Date = new Date()): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const today = getLocalDate();
   const todayHours = hourlyData[today] || new Array(24).fill(0);
 
   switch (achievementId) {
