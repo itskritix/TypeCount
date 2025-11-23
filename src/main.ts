@@ -3,8 +3,6 @@ import started from 'electron-squirrel-startup';
 import Store from 'electron-store';
 import fs from 'node:fs';
 import path from 'node:path';
-
-// Import proper types for type safety
 import AutoLaunch from 'auto-launch';
 import { autoUpdater } from 'electron-updater';
 import type { UiohookKeyboardEvent, UiohookNapi } from 'uiohook-napi';
@@ -137,7 +135,6 @@ interface StoreSchema {
   totalKeystrokes: number;
   dailyKeystrokes: Record<string, number>;
   hourlyKeystrokes: Record<string, number[]>;
-  currentSessionKeystrokes: number;
   firstUsedDate: string;
   lastResetDate: string;
   achievements: Achievement[];
@@ -162,7 +159,6 @@ const store = new Store<StoreSchema>({
     totalKeystrokes: 0,
     dailyKeystrokes: {},
     hourlyKeystrokes: {},
-    currentSessionKeystrokes: 0,
     firstUsedDate: new Date().toISOString(),
     lastResetDate: new Date().toISOString(),
     achievements: [],
@@ -186,7 +182,6 @@ const store = new Store<StoreSchema>({
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let keystrokeCount = 0;
-let sessionStartTime = Date.now();
 
 // Performance optimization variables
 let achievementCheckCounter = 0;
@@ -215,7 +210,6 @@ class KeystrokeTracker {
   // Cached data to reduce store access
   private cachedStats = {
     total: 0,
-    session: 0,
     today: 0,
     streak: 0,
     userLevel: 1,
@@ -230,7 +224,6 @@ class KeystrokeTracker {
   private loadCachedStats() {
     this.cachedStats = {
       total: store.get('totalKeystrokes') || 0,
-      session: store.get('currentSessionKeystrokes') || 0,
       today: getTodayKeystrokes(),
       streak: store.get('streakDays') || 0,
       userLevel: store.get('userLevel') || 1,
@@ -273,7 +266,6 @@ class KeystrokeTracker {
 
     // Update cached stats immediately for responsiveness
     this.cachedStats.total++;
-    this.cachedStats.session++;
     this.cachedStats.today++;
 
     // Batch data persistence to reduce disk I/O
@@ -299,13 +291,12 @@ class KeystrokeTracker {
     try {
       // Batch all store operations together
       store.set('totalKeystrokes', this.cachedStats.total);
-      store.set('currentSessionKeystrokes', this.cachedStats.session);
 
       // Update today's keystroke data
-      const today = new Date().toDateString();
-      const dailyData = store.get('dailyKeystrokeData') || {};
+      const today = new Date().toISOString().split('T')[0];
+      const dailyData = store.get('dailyKeystrokes') || {};
       dailyData[today] = this.cachedStats.today;
-      store.set('dailyKeystrokeData', dailyData);
+      store.set('dailyKeystrokes', dailyData);
 
       this.batchedUpdates = 0;
       this.cachedStats.lastUpdate = Date.now();
@@ -331,7 +322,6 @@ class KeystrokeTracker {
 
         mainWindow.webContents.send('keystroke-update', {
           total: this.cachedStats.total,
-          session: this.cachedStats.session,
           today: this.cachedStats.today,
           streak: this.cachedStats.streak,
           userLevel: this.cachedStats.userLevel,
@@ -459,65 +449,6 @@ const stopKeystrokeTracking = () => {
   }
 };
 
-const updateKeystrokeData = () => {
-  // Update total count
-  const newTotal = store.get('totalKeystrokes') + 1;
-  store.set('totalKeystrokes', newTotal);
-
-  // Update session count
-  store.set('currentSessionKeystrokes', store.get('currentSessionKeystrokes') + 1);
-
-  // Update daily count
-  const today = new Date().toISOString().split('T')[0];
-  const dailyKeystrokes = store.get('dailyKeystrokes');
-  dailyKeystrokes[today] = (dailyKeystrokes[today] || 0) + 1;
-  store.set('dailyKeystrokes', dailyKeystrokes);
-
-  // Update hourly count
-  const hour = new Date().getHours();
-  const hourlyKeystrokes = store.get('hourlyKeystrokes');
-  if (!hourlyKeystrokes[today]) {
-    hourlyKeystrokes[today] = new Array(24).fill(0);
-  }
-  hourlyKeystrokes[today][hour]++;
-  store.set('hourlyKeystrokes', hourlyKeystrokes);
-
-  // Update XP (1 keystroke = 1 XP, with bonuses)
-  let xpGain = 1;
-  const currentXP = store.get('userXP');
-  const currentStreak = store.get('streakDays');
-
-  // Streak bonus: +1 XP for every 7 days of streak
-  if (currentStreak > 0) {
-    xpGain += Math.floor(currentStreak / 7);
-  }
-
-  store.set('userXP', currentXP + xpGain);
-  store.set('userLevel', calculateLevel(currentXP + xpGain));
-
-  // Update streak and personality
-  updateStreak();
-  updatePersonalityType();
-
-  // Performance-optimized achievement and challenge checking
-  achievementCheckCounter++;
-  const currentTime = Date.now();
-  const shouldCheckAchievements =
-    achievementCheckCounter >= ACHIEVEMENT_CHECK_INTERVAL ||
-    currentTime - lastAchievementCheck >= ACHIEVEMENT_CHECK_TIME_INTERVAL;
-
-  if (shouldCheckAchievements) {
-    // Check for new achievements
-    checkForNewAchievements(newTotal, currentStreak, hourlyKeystrokes);
-
-    // Update challenges and goals
-    updateChallengesAndGoals();
-
-    // Reset counters
-    achievementCheckCounter = 0;
-    lastAchievementCheck = currentTime;
-  }
-};
 
 const getTodayKeystrokes = () => {
   const today = new Date().toISOString().split('T')[0];
@@ -994,7 +925,6 @@ const createWindow = () => {
   mainWindow.webContents.on('did-finish-load', () => {
     mainWindow?.webContents.send('initial-data', {
       total: store.get('totalKeystrokes'),
-      session: store.get('currentSessionKeystrokes'),
       today: getTodayKeystrokes(),
       dailyData: store.get('dailyKeystrokes'),
       hourlyData: store.get('hourlyKeystrokes'),
@@ -1009,7 +939,6 @@ const createWindow = () => {
 ipcMain.on('request-data', (event) => {
   event.reply('initial-data', {
     total: store.get('totalKeystrokes'),
-    session: store.get('currentSessionKeystrokes'),
     today: getTodayKeystrokes(),
     dailyData: store.get('dailyKeystrokes'),
     hourlyData: store.get('hourlyKeystrokes'),
@@ -1030,22 +959,25 @@ ipcMain.on('request-data', (event) => {
 
 // IPC handler for creating goals
 ipcMain.on('create-goal', (event, goalData) => {
-  const goal = createGoal(
-    goalData.name,
-    goalData.description || '',
-    goalData.target,
-    goalData.type,
-    goalData.targetDate
-  );
+  const goal: Goal = {
+    id: `goal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    name: goalData.name,
+    description: goalData.description || '',
+    target: goalData.target,
+    current: 0,
+    type: goalData.type,
+    createdDate: new Date().toISOString(),
+    targetDate: goalData.targetDate,
+    completed: false
+  };
 
-  let goals = store.get('goals');
+  let goals = store.get('goals') || [];
   goals.push(goal);
   store.set('goals', goals);
 
   // Send updated data back to renderer
   event.reply('initial-data', {
     total: store.get('totalKeystrokes'),
-    session: store.get('currentSessionKeystrokes'),
     today: getTodayKeystrokes(),
     dailyData: store.get('dailyKeystrokes'),
     hourlyData: store.get('hourlyKeystrokes'),
@@ -1094,8 +1026,6 @@ app.whenReady().then(async () => {
   // Show window on startup for testing
   createWindow();
 
-  // Reset session count
-  store.set('currentSessionKeystrokes', 0);
 
   // Set up auto-updater
   setupAutoUpdater();
@@ -1123,5 +1053,4 @@ app.on('before-quit', () => {
 // Handle app updates
 app.on('will-quit', () => {
   // Save any pending data
-  store.set('currentSessionKeystrokes', 0);
 });

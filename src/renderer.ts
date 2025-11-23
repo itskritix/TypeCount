@@ -3,8 +3,7 @@ import './index.css';
 // import { getWeeklyAnalytics, getMonthlyAnalytics } from './gamification';
 import {
   ACHIEVEMENT_DEFINITIONS,
-  calculateLevel,
-  getXPToNextLevel
+  calculateLevel
 } from './gamification';
 import { cloudSync, CloudSyncConfig } from './cloudSync';
 
@@ -13,11 +12,11 @@ declare global {
     electronAPI: {
       onKeystrokeUpdate: (callback: (data: any) => void) => void;
       onInitialData: (callback: (data: any) => void) => void;
-      onAchievementUnlocked: (callback: (achievement: string) => void) => void;
+      onAchievementUnlocked: (callback: (achievement: Achievement) => void) => void;
       onChallengeCompleted: (callback: (challenge: any) => void) => void;
       requestData: () => void;
       createGoal: (goalData: any) => void;
-      sendManualKeystroke: () => void;
+      resetAllData?: () => void;
     };
   }
 }
@@ -59,7 +58,6 @@ interface Goal {
 
 // State
 let totalKeystrokes = 0;
-let sessionKeystrokes = 0;
 let todayKeystrokes = 0;
 let streakDays = 0;
 let longestStreak = 0;
@@ -77,7 +75,7 @@ let dailyGoal = 5000;
 let weeklyGoal = 35000;
 
 // Current view state
-let currentView: 'today' | 'week' | 'month' | 'year' | 'insights' | 'achievements' | 'challenges' | 'goals' | 'settings' = 'today';
+let currentView: 'insights' | 'achievements' | 'settings' = 'insights';
 
 // Cloud sync state
 let cloudSyncEnabled = false;
@@ -95,102 +93,137 @@ function formatNumber(num: number): string {
   return num.toLocaleString();
 }
 
+// Simplified analytics - focus on insights only
+
+function getProductivityInsights(dailyData: Record<string, number>, hourlyData: Record<string, number[]>, streakDays: number) {
+  // Calculate peak hour
+  const hourlyTotals = new Array(24).fill(0);
+  Object.values(hourlyData).forEach(dayHours => {
+    if (Array.isArray(dayHours)) {
+      dayHours.forEach((count, hour) => {
+        hourlyTotals[hour] += count || 0;
+      });
+    }
+  });
+
+  const peakHour = hourlyTotals.indexOf(Math.max(...hourlyTotals));
+  const peakHourAverage = Math.max(...hourlyTotals);
+
+  // Calculate daily average
+  const totalDays = Object.keys(dailyData).length;
+  const totalKeystrokes = Object.values(dailyData).reduce((sum, count) => sum + count, 0);
+  const averageDaily = totalDays > 0 ? Math.round(totalKeystrokes / totalDays) : 0;
+
+  // Find most productive day
+  let mostProductiveDay = '';
+  let maxCount = 0;
+  Object.entries(dailyData).forEach(([date, count]) => {
+    if (count > maxCount) {
+      maxCount = count;
+      mostProductiveDay = new Date(date).toLocaleDateString();
+    }
+  });
+
+  // Calculate 7-day trend
+  const now = new Date();
+  const last7Days = [];
+  const previous7Days = [];
+
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(now);
+    date.setDate(date.getDate() - i);
+    const dateStr = date.toISOString().split('T')[0];
+    last7Days.push(dailyData[dateStr] || 0);
+
+    const prevDate = new Date(now);
+    prevDate.setDate(prevDate.getDate() - i - 7);
+    const prevDateStr = prevDate.toISOString().split('T')[0];
+    previous7Days.push(dailyData[prevDateStr] || 0);
+  }
+
+  const last7Total = last7Days.reduce((sum, count) => sum + count, 0);
+  const prev7Total = previous7Days.reduce((sum, count) => sum + count, 0);
+
+  let trend = 'stable';
+  if (last7Total > prev7Total * 1.1) trend = 'increasing';
+  else if (last7Total < prev7Total * 0.9) trend = 'decreasing';
+
+  return {
+    peakHour,
+    peakHourAverage,
+    averageDaily,
+    trend,
+    mostProductiveDay,
+    longestStreak: streakDays, // This should be longest streak from data
+    currentStreak: streakDays
+  };
+}
+
 // Create the dashboard UI
 function createDashboard() {
   document.body.innerHTML = `
     <div class="container">
-      <header>
-        <h1>TypeCount</h1>
-        <p class="tagline">Your Digital Typing Footprint</p>
-
-        <!-- User Level & XP Display -->
-        <div class="user-level">
-          <div class="level-badge">
-            <span class="level-number" id="user-level">1</span>
-            <span class="level-label">Level</span>
-          </div>
-          <div class="xp-bar">
-            <div class="xp-progress" id="xp-progress" style="width: 0%"></div>
-            <span class="xp-text" id="xp-text">0 / 1000 XP</span>
-          </div>
-          <div class="personality-type" id="personality-type"></div>
+      <header class="main-header">
+        <div class="header-content">
+          <h1 class="app-title">TypeCount</h1>
+          <p class="app-description">Track your typing productivity and build better habits</p>
         </div>
       </header>
 
-      <div class="stats-grid">
-        <div class="stat-card primary">
-          <div class="stat-value" id="total-count">0</div>
-          <div class="stat-label">Total Keystrokes</div>
-          <div class="stat-icon">🎯</div>
+      <!-- Key Metrics -->
+      <div class="metrics-grid">
+        <div class="metric-card metric-primary">
+          <div class="metric-header">
+            <span class="metric-title">Total Keystrokes</span>
+          </div>
+          <div class="metric-value" id="total-count">0</div>
+          <div class="metric-subtitle">All time</div>
         </div>
 
-        <div class="stat-card">
-          <div class="stat-value" id="today-count">0</div>
-          <div class="stat-label">Today</div>
-          <div class="stat-icon">📅</div>
+        <div class="metric-card">
+          <div class="metric-header">
+            <span class="metric-title">Today</span>
+          </div>
+          <div class="metric-value" id="today-count">0</div>
+          <div class="metric-subtitle">Keystrokes today</div>
         </div>
 
-        <div class="stat-card">
-          <div class="stat-value" id="session-count">0</div>
-          <div class="stat-label">Current Session</div>
-          <div class="stat-icon">⏱️</div>
-        </div>
-
-        <div class="stat-card">
-          <div class="stat-value" id="streak-count">0</div>
-          <div class="stat-label">Day Streak</div>
-          <div class="stat-icon">🔥</div>
+        <div class="metric-card">
+          <div class="metric-header">
+            <span class="metric-title">Current Streak</span>
+          </div>
+          <div class="metric-value" id="streak-count">0</div>
+          <div class="metric-subtitle">Active days</div>
         </div>
       </div>
 
-      <!-- Analytics Tabs -->
-      <div class="analytics-section">
-        <div class="tabs">
-          <button class="tab-button active" data-view="today">Today</button>
-          <button class="tab-button" data-view="week">Week</button>
-          <button class="tab-button" data-view="month">Month</button>
-          <button class="tab-button" data-view="year">Year</button>
-          <button class="tab-button" data-view="insights">Insights</button>
-          <button class="tab-button" data-view="achievements">🏆 Achievements</button>
-          <button class="tab-button" data-view="challenges">🎯 Challenges</button>
-          <button class="tab-button" data-view="goals">📋 Goals</button>
-          <button class="tab-button" data-view="settings">⚙️ Settings</button>
-          <button class="tab-button test-button" onclick="testKeystroke()">🧪 Test</button>
-        </div>
+      <!-- Navigation -->
+      <div class="navigation-section">
+        <nav class="main-navigation">
+          <button class="nav-button active" data-view="insights">Overview</button>
+          <button class="nav-button" data-view="achievements">Achievements</button>
+          <button class="nav-button" data-view="settings">Settings</button>
+        </nav>
 
-        <div class="tab-content" id="analytics-content">
-          <!-- Dynamic content based on selected tab -->
+        <div class="content-area" id="analytics-content">
+          <!-- Dynamic content based on selected view -->
         </div>
       </div>
 
-      <div class="achievements-section">
-        <h2>Achievements</h2>
-        <div class="achievements-grid" id="achievements-grid">
-          <!-- Achievements will be added here -->
-        </div>
-      </div>
 
-      <!-- Export Section -->
-      <div class="export-section">
-        <h3>Export Your Data</h3>
-        <div class="export-buttons">
-          <button id="export-csv" class="export-btn">Export as CSV</button>
-          <button id="export-json" class="export-btn">Export as JSON</button>
-        </div>
-      </div>
 
       <div id="notification" class="notification"></div>
     </div>
   `;
 
-  // Add tab event listeners
-  document.querySelectorAll('.tab-button').forEach(button => {
+  // Add navigation event listeners
+  document.querySelectorAll('.nav-button').forEach(button => {
     button.addEventListener('click', (e) => {
       const target = e.target as HTMLButtonElement;
       const view = target.dataset.view as typeof currentView;
 
-      // Update active tab
-      document.querySelectorAll('.tab-button').forEach(btn => {
+      // Update active nav
+      document.querySelectorAll('.nav-button').forEach(btn => {
         if (btn) btn.classList.remove('active');
       });
       if (target) target.classList.add('active');
@@ -200,9 +233,6 @@ function createDashboard() {
     });
   });
 
-  // Add export event listeners
-  document.getElementById('export-csv')?.addEventListener('click', handleExportCSV);
-  document.getElementById('export-json')?.addEventListener('click', handleExportJSON);
 }
 
 // Render analytics based on current view
@@ -216,29 +246,11 @@ function renderAnalytics() {
 
   try {
     switch (currentView) {
-      case 'today':
-        renderTodayView(contentEl);
-        break;
-      case 'week':
-        renderWeekView(contentEl);
-        break;
-      case 'month':
-        renderMonthView(contentEl);
-        break;
-      case 'year':
-        renderYearView(contentEl);
-        break;
       case 'insights':
         renderInsightsView(contentEl);
         break;
       case 'achievements':
-        renderAchievementsView(contentEl);
-        break;
-      case 'challenges':
-        renderChallengesView(contentEl);
-        break;
-      case 'goals':
-        renderGoalsView(contentEl);
+        contentEl.innerHTML = renderAchievementsView();
         break;
       case 'settings':
         contentEl.innerHTML = renderSettingsView();
@@ -255,100 +267,7 @@ function renderAnalytics() {
   }
 }
 
-// Render today's view
-function renderTodayView(container: HTMLElement) {
-  const today = new Date().toISOString().split('T')[0];
-  const todayHours = hourlyData[today] || new Array(24).fill(0);
 
-  container.innerHTML = `
-    <div class="chart-section">
-      <h2>Today's Activity</h2>
-      <div class="hourly-chart" id="hourly-chart">
-        ${createHourlyChart(todayHours)}
-      </div>
-    </div>
-  `;
-}
-
-// Render week view
-function renderWeekView(container: HTMLElement) {
-  const weekData = getWeeklyAnalytics(dailyData, hourlyData);
-
-  container.innerHTML = `
-    <div class="chart-section">
-      <h2>This Week</h2>
-      <div class="stats-summary">
-        <div class="summary-item">
-          <span class="summary-label">Total:</span>
-          <span class="summary-value">${formatNumber(weekData.total)}</span>
-        </div>
-        <div class="summary-item">
-          <span class="summary-label">Daily Average:</span>
-          <span class="summary-value">${formatNumber(weekData.dailyAverage)}</span>
-        </div>
-      </div>
-      <div class="weekly-chart">
-        ${createDailyChart(weekData.days)}
-      </div>
-    </div>
-  `;
-}
-
-// Render month view
-function renderMonthView(container: HTMLElement) {
-  const monthData = getMonthlyAnalytics(dailyData, hourlyData);
-
-  container.innerHTML = `
-    <div class="chart-section">
-      <h2>${monthData.month} ${monthData.year}</h2>
-      <div class="stats-summary">
-        <div class="summary-item">
-          <span class="summary-label">Total:</span>
-          <span class="summary-value">${formatNumber(monthData.total)}</span>
-        </div>
-        <div class="summary-item">
-          <span class="summary-label">Daily Average:</span>
-          <span class="summary-value">${formatNumber(monthData.dailyAverage)}</span>
-        </div>
-        <div class="summary-item">
-          <span class="summary-label">Best Day:</span>
-          <span class="summary-value">${monthData.topDay.date} (${formatNumber(monthData.topDay.count)})</span>
-        </div>
-      </div>
-      <div class="monthly-chart">
-        ${createDailyChart(monthData.days)}
-      </div>
-    </div>
-  `;
-}
-
-// Render year view
-function renderYearView(container: HTMLElement) {
-  const yearData = getYearlyAnalytics(dailyData);
-
-  container.innerHTML = `
-    <div class="chart-section">
-      <h2>Year ${yearData.year}</h2>
-      <div class="stats-summary">
-        <div class="summary-item">
-          <span class="summary-label">Total:</span>
-          <span class="summary-value">${formatNumber(yearData.total)}</span>
-        </div>
-        <div class="summary-item">
-          <span class="summary-label">Monthly Average:</span>
-          <span class="summary-value">${formatNumber(yearData.monthlyAverage)}</span>
-        </div>
-        <div class="summary-item">
-          <span class="summary-label">Best Month:</span>
-          <span class="summary-value">${yearData.topMonth.month} (${formatNumber(yearData.topMonth.count)})</span>
-        </div>
-      </div>
-      <div class="yearly-chart">
-        ${createMonthlyChart(yearData.months)}
-      </div>
-    </div>
-  `;
-}
 
 // Render insights view
 function renderInsightsView(container: HTMLElement) {
@@ -365,15 +284,6 @@ function renderInsightsView(container: HTMLElement) {
       <h2>Productivity Insights</h2>
 
       <div class="insights-grid">
-        <div class="insight-card">
-          <div class="insight-icon">⏰</div>
-          <div class="insight-content">
-            <div class="insight-label">Peak Productivity Hour</div>
-            <div class="insight-value">${insights.peakHour}:00 - ${insights.peakHour + 1}:00</div>
-            <div class="insight-detail">Average: ${formatNumber(insights.peakHourAverage)} keystrokes</div>
-          </div>
-        </div>
-
         <div class="insight-card">
           <div class="insight-icon">📊</div>
           <div class="insight-content">
@@ -393,15 +303,6 @@ function renderInsightsView(container: HTMLElement) {
         </div>
 
         <div class="insight-card">
-          <div class="insight-icon">🏆</div>
-          <div class="insight-content">
-            <div class="insight-label">Most Productive Day</div>
-            <div class="insight-value">${insights.mostProductiveDay || 'No data yet'}</div>
-            <div class="insight-detail">Your personal record</div>
-          </div>
-        </div>
-
-        <div class="insight-card">
           <div class="insight-icon">🔥</div>
           <div class="insight-content">
             <div class="insight-label">Longest Streak</div>
@@ -414,376 +315,102 @@ function renderInsightsView(container: HTMLElement) {
   `;
 }
 
-// Create hourly chart
-function createHourlyChart(hourlyData: number[]): string {
-  const maxValue = Math.max(...hourlyData, 1);
 
-  return `
-    <div class="chart-bars">
-      ${hourlyData.map((value, hour) => {
-        const height = (value / maxValue) * 100;
-        return `
-          <div class="chart-bar-container">
-            <div class="chart-bar" style="height: ${height}%">
-              <span class="chart-value">${value > 0 ? formatNumber(value) : ''}</span>
-            </div>
-            <span class="chart-label">${hour.toString().padStart(2, '0')}</span>
-          </div>
-        `;
-      }).join('')}
-    </div>
-  `;
-}
-
-// Create daily chart
-function createDailyChart(days: { date: string; count: number }[]): string {
-  const maxValue = Math.max(...days.map(d => d.count), 1);
-
-  return `
-    <div class="chart-bars">
-      ${days.map(day => {
-        const height = (day.count / maxValue) * 100;
-        const dateObj = new Date(day.date);
-        const label = dateObj.toLocaleDateString('en', { month: 'short', day: 'numeric' });
-
-        return `
-          <div class="chart-bar-container">
-            <div class="chart-bar" style="height: ${height}%">
-              <span class="chart-value">${day.count > 0 ? formatNumber(day.count) : ''}</span>
-            </div>
-            <span class="chart-label">${label}</span>
-          </div>
-        `;
-      }).join('')}
-    </div>
-  `;
-}
-
-// Create monthly chart
-function createMonthlyChart(months: { month: string; count: number }[]): string {
-  const maxValue = Math.max(...months.map(m => m.count), 1);
-
-  return `
-    <div class="chart-bars">
-      ${months.map(month => {
-        const height = (month.count / maxValue) * 100;
-        const label = month.month.substring(0, 3);
-
-        return `
-          <div class="chart-bar-container">
-            <div class="chart-bar" style="height: ${height}%">
-              <span class="chart-value">${month.count > 0 ? formatNumber(month.count) : ''}</span>
-            </div>
-            <span class="chart-label">${label}</span>
-          </div>
-        `;
-      }).join('')}
-    </div>
-  `;
-}
 
 // Render achievements view
 function renderAchievementsView(): string {
-  const categories = ['milestone', 'streak', 'time', 'special', 'challenge'];
+  // Define milestone achievements with their unlock thresholds
+  const milestoneAchievements = [
+    { id: 'first_keystroke', name: 'First Steps', description: 'Type your first keystroke', threshold: 1, icon: '🌱' },
+    { id: '100_keystrokes', name: 'Getting Started', description: 'Reach 100 keystrokes', threshold: 100, icon: '🚀' },
+    { id: '1k_keystrokes', name: 'Bronze Typist', description: 'Reach 1,000 keystrokes', threshold: 1000, icon: '🥉' },
+    { id: '5k_keystrokes', name: 'Active Typist', description: 'Reach 5,000 keystrokes', threshold: 5000, icon: '⚡' },
+    { id: '10k_keystrokes', name: 'Silver Typist', description: 'Reach 10,000 keystrokes', threshold: 10000, icon: '🥈' },
+    { id: '25k_keystrokes', name: 'Dedicated Typist', description: 'Reach 25,000 keystrokes', threshold: 25000, icon: '💪' },
+    { id: '50k_keystrokes', name: 'Serious Typist', description: 'Reach 50,000 keystrokes', threshold: 50000, icon: '🎯' },
+    { id: '100k_keystrokes', name: 'Gold Typist', description: 'Reach 100,000 keystrokes', threshold: 100000, icon: '🥇' },
+    { id: '250k_keystrokes', name: 'Expert Typist', description: 'Reach 250,000 keystrokes', threshold: 250000, icon: '⭐' },
+    { id: '500k_keystrokes', name: 'Master Typist', description: 'Reach 500,000 keystrokes', threshold: 500000, icon: '💎' },
+    { id: '1m_keystrokes', name: 'Legendary Typist', description: 'Reach 1,000,000 keystrokes', threshold: 1000000, icon: '👑' }
+  ];
+
+  // Check which achievements are unlocked
+  const achievementsWithStatus = milestoneAchievements.map(achievement => {
+    const isUnlocked = totalKeystrokes >= achievement.threshold;
+    const progress = Math.min((totalKeystrokes / achievement.threshold) * 100, 100);
+
+    return {
+      ...achievement,
+      isUnlocked,
+      progress
+    };
+  });
+
+  const unlockedCount = achievementsWithStatus.filter(a => a.isUnlocked).length;
+  const totalCount = milestoneAchievements.length;
 
   return `
     <div class="achievements-container">
       <div class="achievements-header">
-        <h3>🏆 Achievements</h3>
-        <div class="achievement-stats">
-          <span class="stat-item">
-            <strong>${achievements.length}</strong> unlocked
-          </span>
-          <span class="stat-item">
-            <strong>Level ${userLevel}</strong>
-            <small>(${userXP} XP)</small>
-          </span>
+        <div class="header-content">
+          <h2 class="achievements-title">Achievements</h2>
+          <p class="achievements-description">Track your typing milestones and celebrate your progress</p>
+        </div>
+
+        <div class="achievements-summary">
+          <div class="summary-card">
+            <div class="summary-value">${unlockedCount}</div>
+            <div class="summary-label">Unlocked</div>
+          </div>
+          <div class="summary-divider"></div>
+          <div class="summary-card">
+            <div class="summary-value">${totalCount}</div>
+            <div class="summary-label">Total</div>
+          </div>
+          <div class="summary-divider"></div>
+          <div class="summary-card">
+            <div class="summary-value">${Math.round((unlockedCount / totalCount) * 100)}%</div>
+            <div class="summary-label">Complete</div>
+          </div>
         </div>
       </div>
 
-      ${categories.map(category => {
-        const categoryAchievements = achievements.filter(a => a.category === category);
-        const totalInCategory = ACHIEVEMENT_DEFINITIONS.filter(def => def.category === category).length;
+      <div class="achievements-grid">
+        ${achievementsWithStatus.map(achievement => `
+          <div class="achievement-card ${achievement.isUnlocked ? 'unlocked' : 'locked'}">
+            <div class="achievement-icon-container">
+              <div class="achievement-icon ${achievement.isUnlocked ? 'unlocked' : ''}">${achievement.icon}</div>
+              ${achievement.isUnlocked ? '<div class="unlock-badge">✓</div>' : ''}
+            </div>
 
-        return `
-          <div class="achievement-category">
-            <h4>${category.charAt(0).toUpperCase() + category.slice(1)}
-              <span class="category-progress">(${categoryAchievements.length}/${totalInCategory})</span>
-            </h4>
-            <div class="achievement-grid">
-              ${categoryAchievements.map(achievement => `
-                <div class="achievement-card unlocked">
-                  <div class="achievement-icon">${achievement.icon}</div>
-                  <div class="achievement-details">
-                    <h5>${achievement.name}</h5>
-                    <p>${achievement.description}</p>
-                    <small>Unlocked: ${new Date(achievement.unlockedAt).toLocaleDateString()}</small>
+            <div class="achievement-content">
+              <h3 class="achievement-name">${achievement.name}</h3>
+              <p class="achievement-description">${achievement.description}</p>
+
+              ${!achievement.isUnlocked ? `
+                <div class="achievement-progress">
+                  <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${achievement.progress}%"></div>
+                  </div>
+                  <div class="progress-text">
+                    ${formatNumber(totalKeystrokes)} / ${formatNumber(achievement.threshold)}
                   </div>
                 </div>
-              `).join('')}
+              ` : `
+                <div class="achievement-unlocked">
+                  <span class="unlock-text">Unlocked!</span>
+                </div>
+              `}
             </div>
           </div>
-        `;
-      }).join('')}
-    </div>
-  `;
-}
-
-// Render challenges view
-function renderChallengesView(): string {
-  const activeChallenges = challenges.filter(c => !c.completed);
-  const completedChallenges = challenges.filter(c => c.completed);
-
-  return `
-    <div class="challenges-container">
-      <div class="challenges-header">
-        <h3>🎯 Challenges</h3>
-        <div class="challenge-stats">
-          <span class="stat-item">
-            <strong>${activeChallenges.length}</strong> active
-          </span>
-          <span class="stat-item">
-            <strong>${completedChallenges.length}</strong> completed
-          </span>
-        </div>
-      </div>
-
-      ${activeChallenges.length > 0 ? `
-        <div class="challenge-section">
-          <h4>🔥 Active Challenges</h4>
-          <div class="challenges-grid">
-            ${activeChallenges.map(challenge => {
-              const progress = Math.min((challenge.progress / challenge.target) * 100, 100);
-              const timeLeft = new Date(challenge.endDate).getTime() - Date.now();
-              const daysLeft = Math.max(0, Math.ceil(timeLeft / (1000 * 60 * 60 * 24)));
-
-              return `
-                <div class="challenge-card active">
-                  <div class="challenge-header">
-                    <h5>${challenge.name}</h5>
-                    <span class="challenge-type ${challenge.type}">${challenge.type}</span>
-                  </div>
-                  <p>${challenge.description}</p>
-                  <div class="challenge-progress">
-                    <div class="progress-bar">
-                      <div class="progress-fill" style="width: ${progress}%"></div>
-                    </div>
-                    <span class="progress-text">${challenge.progress}/${challenge.target}</span>
-                  </div>
-                  <div class="challenge-footer">
-                    <span class="time-left">${daysLeft} day${daysLeft !== 1 ? 's' : ''} left</span>
-                    ${challenge.reward ? `<span class="reward">🎁 ${challenge.reward}</span>` : ''}
-                  </div>
-                </div>
-              `;
-            }).join('')}
-          </div>
-        </div>
-      ` : ''}
-
-      ${completedChallenges.length > 0 ? `
-        <div class="challenge-section">
-          <h4> Recent Completions</h4>
-          <div class="challenges-grid">
-            ${completedChallenges.slice(-6).map(challenge => `
-              <div class="challenge-card completed">
-                <div class="challenge-header">
-                  <h5>${challenge.name} ✓</h5>
-                  <span class="challenge-type ${challenge.type}">${challenge.type}</span>
-                </div>
-                <p>${challenge.description}</p>
-                <div class="challenge-completion">
-                  <span class="completion-text">Completed ${new Date(challenge.endDate).toLocaleDateString()}</span>
-                  ${challenge.reward ? `<span class="reward earned">🎁 ${challenge.reward}</span>` : ''}
-                </div>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      ` : ''}
-
-      ${activeChallenges.length === 0 && completedChallenges.length === 0 ? `
-        <div class="empty-state">
-          <p>No challenges available yet. Start typing to unlock your first challenge!</p>
-        </div>
-      ` : ''}
-    </div>
-  `;
-}
-
-// Render goals view
-function renderGoalsView(): string {
-  const activeGoals = goals.filter(g => !g.completed);
-  const completedGoals = goals.filter(g => g.completed);
-
-  return `
-    <div class="goals-container">
-      <div class="goals-header">
-        <h3>🎯 Personal Goals</h3>
-        <div class="goals-stats">
-          <span class="stat-item">
-            <strong>${activeGoals.length}</strong> active
-          </span>
-          <span class="stat-item">
-            <strong>${completedGoals.length}</strong> achieved
-          </span>
-        </div>
-        <button class="create-goal-btn" onclick="showCreateGoalModal()">+ Create Goal</button>
-      </div>
-
-      ${activeGoals.length > 0 ? `
-        <div class="goals-section">
-          <h4>🎯 Active Goals</h4>
-          <div class="goals-list">
-            ${activeGoals.map(goal => {
-              const progress = Math.min((goal.current / goal.target) * 100, 100);
-              const isOverdue = goal.targetDate && new Date(goal.targetDate) < new Date();
-
-              return `
-                <div class="goal-card ${isOverdue ? 'overdue' : ''}">
-                  <div class="goal-header">
-                    <h5>${goal.name}</h5>
-                    <span class="goal-type ${goal.type}">${goal.type}</span>
-                  </div>
-                  <p>${goal.description}</p>
-                  <div class="goal-progress">
-                    <div class="progress-bar large">
-                      <div class="progress-fill" style="width: ${progress}%"></div>
-                    </div>
-                    <div class="progress-details">
-                      <span class="progress-text">${goal.current.toLocaleString()} / ${goal.target.toLocaleString()}</span>
-                      <span class="progress-percent">${progress.toFixed(1)}%</span>
-                    </div>
-                  </div>
-                  ${goal.targetDate ? `
-                    <div class="goal-timeline">
-                      <span class="timeline-label">Target:</span>
-                      <span class="target-date ${isOverdue ? 'overdue' : ''}">${new Date(goal.targetDate).toLocaleDateString()}</span>
-                    </div>
-                  ` : ''}
-                </div>
-              `;
-            }).join('')}
-          </div>
-        </div>
-      ` : ''}
-
-      ${completedGoals.length > 0 ? `
-        <div class="goals-section">
-          <h4>🏆 Achieved Goals</h4>
-          <div class="goals-list">
-            ${completedGoals.slice(-5).map(goal => `
-              <div class="goal-card completed">
-                <div class="goal-header">
-                  <h5>${goal.name} ✓</h5>
-                  <span class="goal-type ${goal.type}">${goal.type}</span>
-                </div>
-                <p>${goal.description}</p>
-                <div class="goal-achievement">
-                  <span class="achievement-text">🎉 Goal achieved!</span>
-                  <span class="achievement-date">Completed: ${new Date().toLocaleDateString()}</span>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      ` : ''}
-
-      ${activeGoals.length === 0 && completedGoals.length === 0 ? `
-        <div class="empty-state">
-          <h4>🚀 Ready to set your first goal?</h4>
-          <p>Create a personal typing goal to track your progress and stay motivated!</p>
-          <button class="create-goal-btn primary" onclick="showCreateGoalModal()">Create Your First Goal</button>
-        </div>
-      ` : ''}
-    </div>
-
-    <!-- Goal Creation Modal (hidden by default) -->
-    <div id="goalModal" class="modal hidden">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h4>🎯 Create New Goal</h4>
-          <button class="close-btn" onclick="hideCreateGoalModal()">&times;</button>
-        </div>
-        <form id="goalForm" onsubmit="createNewGoal(event)">
-          <div class="form-group">
-            <label for="goalName">Goal Name:</label>
-            <input type="text" id="goalName" required placeholder="e.g., Type 10,000 keystrokes this week">
-          </div>
-          <div class="form-group">
-            <label for="goalDescription">Description:</label>
-            <textarea id="goalDescription" placeholder="Optional description for your goal"></textarea>
-          </div>
-          <div class="form-group">
-            <label for="goalTarget">Target (keystrokes):</label>
-            <input type="number" id="goalTarget" required min="1" placeholder="e.g., 10000">
-          </div>
-          <div class="form-group">
-            <label for="goalType">Goal Type:</label>
-            <select id="goalType" required>
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-              <option value="monthly">Monthly</option>
-              <option value="custom">Custom</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="goalTargetDate">Target Date (optional):</label>
-            <input type="date" id="goalTargetDate">
-          </div>
-          <div class="form-actions">
-            <button type="button" class="cancel-btn" onclick="hideCreateGoalModal()">Cancel</button>
-            <button type="submit" class="create-btn">Create Goal</button>
-          </div>
-        </form>
+        `).join('')}
       </div>
     </div>
   `;
 }
 
-// Handle CSV export
-function handleExportCSV() {
-  try {
-    const csv = exportToCSV(dailyData, hourlyData);
-    downloadFile(csv, 'typecount-data.csv', 'text/csv');
-  } catch (error) {
-    console.error('Error exporting CSV:', error);
-    showNotification('Failed to export CSV data. Please try again.');
-  }
-}
 
-// Handle JSON export
-function handleExportJSON() {
-  try {
-    const json = exportToJSON({
-      totalKeystrokes,
-      dailyKeystrokes: dailyData,
-      hourlyKeystrokes: hourlyData,
-      achievements,
-      streakDays,
-      firstUsedDate
-    });
-    downloadFile(json, 'typecount-data.json', 'application/json');
-  } catch (error) {
-    console.error('Error exporting JSON:', error);
-    showNotification('Failed to export JSON data. Please try again.');
-  }
-}
 
-// Download file utility
-function downloadFile(content: string, filename: string, type: string) {
-  const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-
-  showNotification(`Data exported to ${filename}`);
-}
 
 // Update the UI with new data
 function updateUI() {
@@ -791,14 +418,12 @@ function updateUI() {
     const elements = {
       totalEl: document.getElementById('total-count'),
       todayEl: document.getElementById('today-count'),
-      sessionEl: document.getElementById('session-count'),
       streakEl: document.getElementById('streak-count')
     };
 
-    // Update basic stats with error handling
+    // Update metrics
     if (elements.totalEl) elements.totalEl.textContent = formatNumber(totalKeystrokes);
     if (elements.todayEl) elements.todayEl.textContent = formatNumber(todayKeystrokes);
-    if (elements.sessionEl) elements.sessionEl.textContent = formatNumber(sessionKeystrokes);
     if (elements.streakEl) elements.streakEl.textContent = `${streakDays}`;
 
     // Log missing critical elements
@@ -810,213 +435,172 @@ function updateUI() {
       console.warn('Missing UI elements:', missingElements);
     }
 
-    updateAchievements();
-    renderAnalytics();
+    // Achievements view updates automatically through renderAnalytics()
+
+    // Only re-render the current analytics view if it depends on real-time data
+    if (currentView === 'insights') {
+      renderAnalytics();
+    }
+    // Don't re-render forms/modals/settings that contain user input
   } catch (error) {
     console.error('Error updating UI:', error);
     showNotification('UI update failed - please refresh the page');
   }
 }
 
-// Update achievements display
-function updateAchievements() {
-  const achievementsGrid = document.getElementById('achievements-grid');
-  if (!achievementsGrid) return;
-
-  const allAchievements = [
-    { id: '1K_keystrokes', name: '1K Keystrokes', icon: '🥉', unlocked: false },
-    { id: '10K_keystrokes', name: '10K Keystrokes', icon: '🥈', unlocked: false },
-    { id: '100K_keystrokes', name: '100K Keystrokes', icon: '🥇', unlocked: false },
-    { id: '1M_keystrokes', name: '1M Keystrokes', icon: '💎', unlocked: false }
-  ];
-
-  // Mark unlocked achievements
-  allAchievements.forEach(ach => {
-    if (achievements.includes(ach.id)) {
-      ach.unlocked = true;
-    }
-  });
-
-  achievementsGrid.innerHTML = allAchievements.map(ach => `
-    <div class="achievement ${ach.unlocked ? 'unlocked' : 'locked'}">
-      <div class="achievement-icon">${ach.icon}</div>
-      <div class="achievement-name">${ach.name}</div>
-    </div>
-  `).join('');
-}
 
 // Render settings view
 function renderSettingsView(): string {
   return `
     <div class="settings-container">
       <div class="settings-header">
-        <h3>⚙️ Settings</h3>
-        <p>Manage your TypeCount preferences and cloud sync</p>
+        <div class="header-content">
+          <h2 class="settings-title">Settings</h2>
+          <p class="settings-description">Manage your preferences and account settings</p>
+        </div>
       </div>
 
-      <!-- Cloud Sync Section -->
-      <div class="settings-section">
-        <div class="section-header">
-          <h4>☁️ Cloud Sync</h4>
-          <p class="section-description">Sync your typing data across devices (optional)</p>
-        </div>
-
-        <div class="cloud-sync-status">
-          <div class="sync-status-indicator ${isSignedIn ? 'connected' : 'disconnected'}">
-            <span class="status-dot"></span>
-            <span class="status-text">
-              ${isSignedIn ? ` Connected as ${currentUser?.email || 'User'}` : '⚪ Not connected'}
-            </span>
+      <!-- Cloud Sync Card -->
+      <div class="settings-card">
+        <div class="card-header">
+          <div class="card-title-section">
+            <h3 class="card-title">Cloud Sync</h3>
+            <p class="card-description">Sync your typing data across devices securely</p>
+          </div>
+          <div class="connection-status ${isSignedIn ? 'connected' : 'disconnected'}">
+            <div class="status-indicator"></div>
+            <span class="status-text">${isSignedIn ? 'Connected' : 'Disconnected'}</span>
           </div>
         </div>
 
-        ${!isSignedIn ? `
-          <div class="auth-section">
-            <div class="auth-tabs">
-              <button class="auth-tab active" onclick="showAuthTab('signin')">Sign In</button>
-              <button class="auth-tab" onclick="showAuthTab('signup')">Create Account</button>
-            </div>
+        <div class="card-content">
+          ${!isSignedIn ? `
+            <div class="auth-container">
+              <div class="auth-header">
+                <h4>Sign in to enable cloud sync</h4>
+                <p>Securely backup and sync your typing data across all your devices</p>
+              </div>
 
-            <form id="auth-form" class="auth-form" onsubmit="handleAuth(event)">
-              <div class="form-group">
-                <label for="auth-email">Email:</label>
-                <input type="email" id="auth-email" required placeholder="your@email.com">
-              </div>
-              <div class="form-group">
-                <label for="auth-password">Password:</label>
-                <input type="password" id="auth-password" required placeholder="Password (min 6 chars)">
-              </div>
-              <div class="form-actions">
-                <button type="submit" class="auth-submit-btn" id="auth-submit">
-                  <span class="btn-text">Sign In</span>
-                  <span class="btn-loading hidden">⏳ Please wait...</span>
+              <form id="auth-form" class="auth-form" onsubmit="handleAuth(event)">
+                <div class="form-field">
+                  <label class="field-label" for="auth-email">Email address</label>
+                  <input
+                    type="email"
+                    id="auth-email"
+                    class="field-input"
+                    required
+                    placeholder="Enter your email"
+                    autocomplete="email"
+                  >
+                </div>
+
+                <div class="form-field">
+                  <label class="field-label" for="auth-password">Password</label>
+                  <input
+                    type="password"
+                    id="auth-password"
+                    class="field-input"
+                    required
+                    placeholder="Enter your password"
+                    autocomplete="current-password"
+                  >
+                </div>
+
+                <button type="submit" class="auth-button" id="auth-submit">
+                  <span class="btn-content">
+                    <span class="btn-text">Sign In</span>
+                    <span class="btn-loading hidden">Signing in...</span>
+                  </span>
                 </button>
+
+                <input type="hidden" id="auth-mode" value="signin">
+              </form>
+
+              <div class="privacy-info">
+                <div class="privacy-icon">🔒</div>
+                <div class="privacy-content">
+                  <h5>Privacy & Security</h5>
+                  <p>Your data is encrypted end-to-end. Only you can access your typing statistics. Cloud sync is optional and can be disabled at any time.</p>
+                </div>
               </div>
-              <input type="hidden" id="auth-mode" value="signin">
-            </form>
-
-            <div class="privacy-notice">
-              <p><strong>Privacy First:</strong> Your typing data is encrypted and only accessible by you.
-              Cloud sync is completely optional and you can disable it anytime.</p>
             </div>
-          </div>
-        ` : `
-          <div class="sync-controls">
-            <div class="sync-settings">
-              <label class="setting-item">
-                <input type="checkbox" ${cloudSyncEnabled ? 'checked' : ''} onchange="toggleCloudSync(this.checked)">
-                <span class="checkmark"></span>
-                <span class="setting-label">Enable automatic cloud sync</span>
-              </label>
+          ` : `
+            <div class="sync-dashboard">
+              <div class="account-info">
+                <div class="user-avatar">
+                  <div class="avatar-icon">${currentUser?.email?.charAt(0).toUpperCase() || 'U'}</div>
+                </div>
+                <div class="user-details">
+                  <h4 class="user-email">${currentUser?.email || 'Unknown User'}</h4>
+                  <p class="user-status">Account active</p>
+                </div>
+              </div>
 
-              <div class="sync-frequency">
-                <label for="sync-interval">Sync frequency:</label>
-                <select id="sync-interval" onchange="updateSyncInterval(this.value)">
-                  <option value="1" ${cloudSyncConfig.syncInterval === 1 ? 'selected' : ''}>Every hour</option>
-                  <option value="6" ${cloudSyncConfig.syncInterval === 6 ? 'selected' : ''}>Every 6 hours</option>
-                  <option value="24" ${cloudSyncConfig.syncInterval === 24 ? 'selected' : ''}>Daily</option>
-                  <option value="168" ${cloudSyncConfig.syncInterval === 168 ? 'selected' : ''}>Weekly</option>
-                </select>
+              <div class="sync-settings">
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <h5>Automatic Sync</h5>
+                    <p>Automatically backup your data to the cloud</p>
+                  </div>
+                  <label class="toggle-switch">
+                    <input type="checkbox" ${cloudSyncEnabled ? 'checked' : ''} onchange="toggleCloudSync(this.checked)">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+
+                ${cloudSyncEnabled ? `
+                  <div class="setting-row">
+                    <div class="setting-info">
+                      <h5>Sync Frequency</h5>
+                      <p>How often to sync your data</p>
+                    </div>
+                    <select class="setting-select" id="sync-interval" onchange="updateSyncInterval(this.value)">
+                      <option value="1" ${cloudSyncConfig.syncInterval === 1 ? 'selected' : ''}>Every hour</option>
+                      <option value="6" ${cloudSyncConfig.syncInterval === 6 ? 'selected' : ''}>Every 6 hours</option>
+                      <option value="24" ${cloudSyncConfig.syncInterval === 24 ? 'selected' : ''}>Daily</option>
+                      <option value="168" ${cloudSyncConfig.syncInterval === 168 ? 'selected' : ''}>Weekly</option>
+                    </select>
+                  </div>
+                ` : ''}
+
+                ${cloudSyncConfig.lastSync ? `
+                  <div class="sync-status-info">
+                    <span class="sync-label">Last synced</span>
+                    <span class="sync-time">${new Date(cloudSyncConfig.lastSync).toLocaleString()}</span>
+                  </div>
+                ` : ''}
               </div>
 
               <div class="sync-actions">
-                <button class="sync-btn" onclick="manualSync()">🔄 Sync Now</button>
-                <button class="backup-btn" onclick="backupData()">💾 Backup Data</button>
-                <button class="restore-btn" onclick="showRestoreModal()">📥 Restore Data</button>
+                <button class="action-button primary" onclick="manualSync()">
+                  <span class="button-icon">↻</span>
+                  Sync Now
+                </button>
+                <button class="action-button secondary" onclick="backupData()">
+                  <span class="button-icon">💾</span>
+                  Backup
+                </button>
+                <button class="action-button secondary" onclick="showRestoreModal()">
+                  <span class="button-icon">📥</span>
+                  Restore
+                </button>
               </div>
 
-              ${cloudSyncConfig.lastSync ? `
-                <div class="sync-info">
-                  <p class="last-sync">Last sync: ${new Date(cloudSyncConfig.lastSync).toLocaleString()}</p>
-                </div>
-              ` : ''}
+              <div class="account-footer">
+                <button class="sign-out-button" onclick="signOut()">Sign Out</button>
+              </div>
             </div>
-
-            <div class="account-actions">
-              <button class="sign-out-btn" onclick="signOut()">Sign Out</button>
-            </div>
-          </div>
-        `}
-      </div>
-
-      <!-- Data Management Section -->
-      <div class="settings-section">
-        <div class="section-header">
-          <h4>📊 Data Management</h4>
-          <p class="section-description">Export or reset your typing data</p>
-        </div>
-
-        <div class="data-actions">
-          <button class="export-btn" onclick="handleExportCSV()">📄 Export CSV</button>
-          <button class="export-btn" onclick="handleExportJSON()">📄 Export JSON</button>
-          <button class="reset-btn" onclick="showResetDataModal()">🗑️ Reset All Data</button>
-        </div>
-
-        <div class="data-info">
-          <div class="data-stat">
-            <span class="stat-label">Total keystrokes:</span>
-            <span class="stat-value">${formatNumber(totalKeystrokes)}</span>
-          </div>
-          <div class="data-stat">
-            <span class="stat-label">Days tracked:</span>
-            <span class="stat-value">${Object.keys(dailyData).length}</span>
-          </div>
-          <div class="data-stat">
-            <span class="stat-label">First used:</span>
-            <span class="stat-value">${firstUsedDate ? new Date(firstUsedDate).toLocaleDateString() : 'Unknown'}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Data Reset Confirmation Modal -->
-      <div id="resetDataModal" class="modal hidden">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h4>⚠️ Reset All Data</h4>
-            <button class="close-btn" onclick="hideResetDataModal()">&times;</button>
-          </div>
-          <div class="modal-body">
-            <p><strong>This action cannot be undone!</strong></p>
-            <p>This will permanently delete all your typing data including:</p>
-            <ul>
-              <li>All keystroke counts</li>
-              <li>Achievement progress</li>
-              <li>Goals and challenges</li>
-              <li>Historical data</li>
-            </ul>
-            <p>Make sure you have exported your data if you want to keep a backup.</p>
-          </div>
-          <div class="form-actions">
-            <button type="button" class="cancel-btn" onclick="hideResetDataModal()">Cancel</button>
-            <button type="button" class="reset-confirm-btn" onclick="confirmResetData()">Reset All Data</button>
-          </div>
+          `}
         </div>
       </div>
     </div>
   `;
 }
 
-// Cloud sync authentication functions
-async function showAuthTab(mode: 'signin' | 'signup') {
-  const signinTab = document.querySelector('.auth-tab:first-child') as HTMLElement;
-  const signupTab = document.querySelector('.auth-tab:last-child') as HTMLElement;
-  const submitBtn = document.getElementById('auth-submit') as HTMLElement;
-  const authMode = document.getElementById('auth-mode') as HTMLInputElement;
-
-  if (!signinTab || !signupTab || !submitBtn || !authMode) return;
-
-  // Update tab states
-  signinTab.classList.toggle('active', mode === 'signin');
-  signupTab.classList.toggle('active', mode === 'signup');
-
-  // Update button text
-  const btnText = submitBtn.querySelector('.btn-text');
-  if (btnText) {
-    btnText.textContent = mode === 'signin' ? 'Sign In' : 'Create Account';
-  }
-
-  // Update hidden mode
-  authMode.value = mode;
+// Cloud sync authentication functions (simplified to signin only)
+function showAuthTab(mode: 'signin' | 'signup') {
+  // Function kept for compatibility but only handles signin now
+  return;
 }
 
 async function handleAuth(event: Event) {
@@ -1026,7 +610,6 @@ async function handleAuth(event: Event) {
   const formData = new FormData(form);
   const email = formData.get('auth-email') as string;
   const password = formData.get('auth-password') as string;
-  const mode = formData.get('auth-mode') as string;
 
   if (!email || !password) {
     showNotification('Please fill in all fields');
@@ -1057,10 +640,8 @@ async function handleAuth(event: Event) {
       throw new Error('Failed to initialize cloud sync');
     }
 
-    // Attempt authentication
-    const result = mode === 'signin'
-      ? await cloudSync.signIn(email, password)
-      : await cloudSync.signUp(email, password);
+    // Attempt signin only
+    const result = await cloudSync.signIn(email, password);
 
     if (result.error) {
       throw new Error(result.error.message || 'Authentication failed');
@@ -1071,7 +652,7 @@ async function handleAuth(event: Event) {
       isSignedIn = true;
       cloudSyncEnabled = true;
 
-      showNotification(` Successfully ${mode === 'signin' ? 'signed in' : 'created account'}!`);
+      showNotification('Successfully signed in!');
 
       // Refresh settings view
       if (currentView === 'settings') {
@@ -1083,7 +664,7 @@ async function handleAuth(event: Event) {
     }
   } catch (error: any) {
     console.error('Authentication error:', error);
-    showNotification(` ${error.message || 'Authentication failed'}`);
+    showNotification(`${error.message || 'Authentication failed'}`);
   } finally {
     // Reset loading state
     if (btnText && btnLoading) {
@@ -1371,7 +952,6 @@ async function confirmResetData() {
   try {
     // Reset all local data
     totalKeystrokes = 0;
-    sessionKeystrokes = 0;
     todayKeystrokes = 0;
     streakDays = 0;
     achievements = [];
@@ -1655,14 +1235,12 @@ initializeCloudSync();
 // Listen for data updates from main process
 window.electronAPI.onKeystrokeUpdate((data) => {
   totalKeystrokes = data.total;
-  sessionKeystrokes = data.session;
   todayKeystrokes = data.today;
   updateUI();
 });
 
 window.electronAPI.onInitialData((data) => {
   totalKeystrokes = data.total;
-  sessionKeystrokes = data.session;
   todayKeystrokes = data.today;
   streakDays = data.streak;
   achievements = data.achievements || [];
@@ -1680,7 +1258,11 @@ window.electronAPI.onInitialData((data) => {
 
 window.electronAPI.onAchievementUnlocked((achievement) => {
   achievements.push(achievement);
-  updateAchievements();
+
+  // Re-render achievements view if currently visible
+  if (currentView === 'achievements') {
+    renderAnalytics();
+  }
 
   // Show celebration animation
   celebrateAchievement(achievement.id);
@@ -1696,21 +1278,28 @@ window.electronAPI.onChallengeCompleted((challenge) => {
   showCelebration('challenge', `Challenge Complete!`, `${challenge.name} - Earned ${challenge.reward || '0 XP'}`);
 
   // Update UI to reflect completion
-  if (currentView === 'challenges') {
-    renderAnalytics();
-  }
+  // No specific view updates needed since challenges view was removed
 });
 
 // Request initial data on load
 window.electronAPI.requestData();
 
-// Test function for manual keystroke simulation
-function testKeystroke() {
-  if (window.electronAPI.sendManualKeystroke) {
-    window.electronAPI.sendManualKeystroke();
-    console.log('Test keystroke sent!');
-  }
-}
+// Make functions globally available for onclick handlers
+(window as any).showCreateGoalModal = showCreateGoalModal;
+(window as any).hideCreateGoalModal = hideCreateGoalModal;
+(window as any).createNewGoal = createNewGoal;
+(window as any).showAuthTab = showAuthTab;
+(window as any).handleAuth = handleAuth;
+(window as any).signOut = signOut;
+(window as any).manualSync = manualSync;
+(window as any).backupData = backupData;
+(window as any).showRestoreModal = showRestoreModal;
+(window as any).hideRestoreModal = hideRestoreModal;
+(window as any).confirmRestore = confirmRestore;
+(window as any).showResetDataModal = showResetDataModal;
+(window as any).hideResetDataModal = hideResetDataModal;
+(window as any).confirmResetData = confirmResetData;
+(window as any).hideCelebration = hideCelebration;
+(window as any).toggleCloudSync = toggleCloudSync;
+(window as any).updateSyncInterval = updateSyncInterval;
 
-// Make the function globally available
-(window as any).testKeystroke = testKeystroke;
