@@ -307,12 +307,16 @@ class CloudSyncService {
       // Merge last active date (use most recent)
       if (deviceData.last_active_date) {
         const currentLastActive = mergedData.lastActiveDate;
-        if (!currentLastActive || new Date(deviceData.last_active_date) > new Date(currentLastActive)) {
+        const cloudDate = new Date(deviceData.last_active_date);
+        const localDate = currentLastActive ? new Date(currentLastActive) : new Date(0);
+
+        if (cloudDate > localDate) {
+          // Cloud has newer activity, trust its streak state
           mergedData.lastActiveDate = deviceData.last_active_date;
-          // If we adopt a newer last active date, we should probably trust that device's streak count
-          // unless our local streak is somehow better and valid.
-          // Simplest safe approach: Take max streak if dates match or are close?
-          // Actually, simply taking max streak_days is usually safe enough provided lastActiveDate is also updated.
+          mergedData.streakDays = deviceData.streak_days || 0;
+        } else if (cloudDate.getTime() === localDate.getTime()) {
+          // Same day activity: user might have synced a higher streak from another device today
+          // so we take the maximum to prevent accidental resets
           mergedData.streakDays = Math.max(mergedData.streakDays || 0, deviceData.streak_days || 0);
         }
       }
