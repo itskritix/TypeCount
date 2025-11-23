@@ -872,6 +872,8 @@ async function manualSync() {
     const result = await cloudSync.syncData(localData);
 
     if (result.success && result.mergedData) {
+      console.log(`📤 Applying cloud sync results - Total before: ${totalKeystrokes}, Total after: ${result.mergedData.totalKeystrokes}`);
+
       // Update local state with merged data
       totalKeystrokes = result.mergedData.totalKeystrokes || totalKeystrokes;
       dailyData = result.mergedData.dailyKeystrokes || dailyData;
@@ -884,6 +886,7 @@ async function manualSync() {
       firstUsedDate = result.mergedData.firstUsedDate || firstUsedDate;
 
       // Persist synced data to main process
+      console.log(`💾 Sending merged data to main process - Total: ${result.mergedData.totalKeystrokes}`);
       window.electronAPI.updateUserData(result.mergedData);
 
       // Update UI

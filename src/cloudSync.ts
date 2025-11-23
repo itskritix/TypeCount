@@ -250,11 +250,8 @@ class CloudSyncService {
     let mergedData = { ...localData };
 
     for (const deviceData of cloudDataArray) {
-      // Merge total keystrokes (use maximum)
-      mergedData.totalKeystrokes = Math.max(
-        mergedData.totalKeystrokes || 0,
-        deviceData.total_keystrokes || 0
-      );
+      // Note: Total keystrokes will be recalculated from daily data later
+      // to ensure consistency and prevent discrepancies
 
       // Merge daily keystrokes (sum for each day)
       for (const [date, count] of Object.entries(deviceData.daily_keystrokes || {})) {
@@ -323,8 +320,11 @@ class CloudSyncService {
     }
 
     // Recalculate total based on merged data
+    const oldTotal = mergedData.totalKeystrokes || 0;
     mergedData.totalKeystrokes = Object.values(mergedData.dailyKeystrokes || {})
       .reduce((sum: number, count: any) => sum + (count || 0), 0);
+
+    console.log(`📊 Cloud Sync Merge - Total recalculated: ${oldTotal} → ${mergedData.totalKeystrokes}`);
 
     // --- Recalculate XP and Level ---
     // This ensures XP is consistent with stats while preserving extra XP from challenges

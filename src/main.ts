@@ -355,6 +355,8 @@ class KeystrokeTracker {
       // FIXED: Store all critical data atomically
       const today = new Date().toISOString().split('T')[0];
 
+      console.log(`💾 Flushing ${this.batchedUpdates} keystrokes to storage - Total: ${this.cachedStats.total}, Today: ${this.cachedStats.today}`);
+
       // Primary storage operations
       store.set('totalKeystrokes', this.cachedStats.total);
       store.set(`dailyKeystrokes.${today}`, this.cachedStats.today);
@@ -1027,10 +1029,12 @@ const destroyWidget = () => {
 const updateWidget = () => {
   if (widgetWindow && !widgetWindow.isDestroyed() && keystrokeTracker) {
     // Use cached data instead of expensive store operations
-    widgetWindow.webContents.send('widget-update', {
+    const widgetData = {
       total: keystrokeTracker.cachedStats.total,
       today: keystrokeTracker.cachedStats.today
-    });
+    };
+    console.log(`📊 Updating widget - Total: ${widgetData.total}, Today: ${widgetData.today}`);
+    widgetWindow.webContents.send('widget-update', widgetData);
   }
 };
 
@@ -1650,6 +1654,8 @@ ipcMain.on('create-goal', (event, goalData) => {
 // IPC handler for updating user data (e.g., from cloud sync)
 ipcMain.on('update-user-data', (event, data) => {
   try {
+    console.log(`☁️ Received cloud sync update - Total: ${data.totalKeystrokes}, Daily keys count: ${Object.keys(data.dailyKeystrokes || {}).length}`);
+
     if (data.totalKeystrokes !== undefined) store.set('totalKeystrokes', data.totalKeystrokes);
     if (data.dailyKeystrokes !== undefined) store.set('dailyKeystrokes', data.dailyKeystrokes);
     if (data.hourlyKeystrokes !== undefined) store.set('hourlyKeystrokes', data.hourlyKeystrokes);
@@ -1666,10 +1672,14 @@ ipcMain.on('update-user-data', (event, data) => {
     
     // Refresh tracker cache if it exists
     if (keystrokeTracker) {
+      const today = new Date().toISOString().split('T')[0];
       keystrokeTracker.cachedStats.total = store.get('totalKeystrokes') || 0;
+      keystrokeTracker.cachedStats.today = (store.get('dailyKeystrokes') || {})[today] || 0;
       keystrokeTracker.cachedStats.streak = store.get('streakDays') || 0;
       keystrokeTracker.cachedStats.userLevel = store.get('userLevel') || 1;
       keystrokeTracker.cachedStats.userXP = store.get('userXP') || 0;
+
+      console.log(`🔄 Cache refreshed after cloud sync - Total: ${keystrokeTracker.cachedStats.total}, Today: ${keystrokeTracker.cachedStats.today}`);
     }
 
     // Broadcast update to all windows
@@ -1731,10 +1741,12 @@ const recalculateUserXP = () => {
 
 // IPC handlers for widget communication
 ipcMain.on('widget-request-data', (event) => {
-  event.reply('widget-update', {
+  const widgetData = {
     total: store.get('totalKeystrokes') || 0,
     today: getTodayKeystrokes()
-  });
+  };
+  console.log(`📱 Widget requested data - Total: ${widgetData.total}, Today: ${widgetData.today}`);
+  event.reply('widget-update', widgetData);
 });
 
 // Hide app from dock/taskbar completely (like Raycast)
