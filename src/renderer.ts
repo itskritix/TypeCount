@@ -162,6 +162,9 @@ function getProductivityInsights(dailyData: Record<string, number>, hourlyData: 
 // Create the dashboard UI
 function createDashboard() {
   document.body.innerHTML = `
+    <!-- Draggable Region for Frameless Window -->
+    <div class="title-bar-drag-region"></div>
+
     <div class="container">
       <header class="main-header">
         <div class="header-content">
@@ -516,13 +519,6 @@ function renderSettingsView(): string {
                 <input type="hidden" id="auth-mode" value="signin">
               </form>
 
-              <div class="privacy-info">
-                <div class="privacy-icon">🔒</div>
-                <div class="privacy-content">
-                  <h5>Privacy & Security</h5>
-                  <p>Your data is encrypted end-to-end. Only you can access your typing statistics. Cloud sync is optional and can be disabled at any time.</p>
-                </div>
-              </div>
             </div>
           ` : `
             <div class="sync-dashboard">

@@ -751,32 +751,45 @@ const createWidget = () => {
           margin: 0;
           padding: 0;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          background: rgba(0, 0, 0, 0.7);
-          backdrop-filter: blur(10px);
-          border-radius: 8px;
-          color: white;
+          background: rgba(24, 24, 27, 0.95);
+          backdrop-filter: blur(16px);
+          border-radius: 12px;
+          color: #fafafa;
           overflow: hidden;
           cursor: move;
           -webkit-app-region: drag;
           user-select: none;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          box-sizing: border-box;
+          height: 100vh;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
         }
         .widget-content {
-          padding: 10px;
+          padding: 12px;
           text-align: center;
         }
         .title {
-          font-size: 11px;
-          opacity: 0.8;
-          margin-bottom: 2px;
+          font-size: 10px;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          color: #a1a1aa;
+          font-weight: 600;
+          margin-bottom: 4px;
         }
         .count {
-          font-size: 18px;
-          font-weight: bold;
+          font-size: 20px;
+          font-weight: 800;
           margin-bottom: 2px;
+          color: #fafafa;
+          font-feature-settings: "tnum";
+          font-variant-numeric: tabular-nums;
         }
         .today {
-          font-size: 10px;
-          opacity: 0.7;
+          font-size: 11px;
+          color: #8b5cf6;
+          font-weight: 500;
         }
       </style>
     </head>
@@ -787,6 +800,7 @@ const createWidget = () => {
         <div class="today" id="today-count">Today: 0</div>
       </div>
       <script>
+        // Widget update function
         const updateWidget = (data) => {
           const totalEl = document.getElementById('total-count');
           const todayEl = document.getElementById('today-count');
@@ -806,12 +820,14 @@ const createWidget = () => {
           return (num / 1000000000).toFixed(1) + 'B';
         };
 
+        // Listen for updates from main process
         const { ipcRenderer } = require('electron');
 
         ipcRenderer.on('widget-update', (event, data) => {
           updateWidget(data);
         });
 
+        // Request initial data
         ipcRenderer.send('widget-request-data');
       </script>
     </body>
@@ -1322,14 +1338,26 @@ const createWindow = () => {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    minWidth: 800,
+    minHeight: 600,
+    backgroundColor: '#09090b', // Matches new dark theme
+    titleBarStyle: 'hidden', // Hides native title bar but keeps window controls overlay on Mac
+    titleBarOverlay: {
+      color: '#09090b',
+      symbolColor: '#fafafa',
+      height: 32
+    },
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false
     },
     icon: getAppIconPath(),
-    title: 'TypeCount Dashboard'
+    title: 'TypeCount'
   });
+
+  // Remove the default menu bar for a clean look
+  mainWindow.setMenuBarVisibility(false);
 
   // Load debug page for troubleshooting
   const debugMode = process.env.NODE_ENV === 'development';
