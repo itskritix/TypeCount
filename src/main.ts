@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, systemPreferences, Tray } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, systemPreferences, Tray, Notification } from 'electron';
 import started from 'electron-squirrel-startup';
 import Store from 'electron-store';
 import fs from 'node:fs';
@@ -143,6 +143,7 @@ interface StoreSchema {
   longestStreak: number;
   lastActiveDate: string;
   autoLaunchEnabled: boolean;
+  widgetEnabled: boolean;
   challenges: Challenge[];
   goals: Goal[];
   userLevel: number;
@@ -152,6 +153,8 @@ interface StoreSchema {
   weeklyGoal: number;
   totalSessions: number;
   averageSessionLength: number;
+  hasTypedFirstKeystroke: boolean; // Track if user has typed anything
+  hasShownWelcomeNotification: boolean;
 }
 
 const store = new Store<StoreSchema>({
@@ -167,6 +170,7 @@ const store = new Store<StoreSchema>({
     longestStreak: 0,
     lastActiveDate: new Date().toISOString(),
     autoLaunchEnabled: true,
+    widgetEnabled: false,
     challenges: [],
     goals: [],
     userLevel: 1,
@@ -175,13 +179,59 @@ const store = new Store<StoreSchema>({
     dailyGoal: 5000,
     weeklyGoal: 35000,
     totalSessions: 0,
-    averageSessionLength: 0
+    averageSessionLength: 0,
+    hasTypedFirstKeystroke: false,
+    hasShownWelcomeNotification: false
   }
 });
 
 let mainWindow: BrowserWindow | null = null;
+let widgetWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
+let isQuitting = false;
 let keystrokeCount = 0;
+
+// Timer management system to prevent memory leaks
+class TimerManager {
+  private timers = new Set<NodeJS.Timeout>();
+  private intervals = new Set<NodeJS.Timeout>();
+
+  addTimeout(fn: () => void, ms: number): NodeJS.Timeout {
+    const timer = setTimeout(() => {
+      this.timers.delete(timer);
+      fn();
+    }, ms);
+    this.timers.add(timer);
+    return timer;
+  }
+
+  addInterval(fn: () => void, ms: number): NodeJS.Timeout {
+    const interval = setInterval(fn, ms);
+    this.intervals.add(interval);
+    return interval;
+  }
+
+  clearTimeout(timer: NodeJS.Timeout): void {
+    clearTimeout(timer);
+    this.timers.delete(timer);
+  }
+
+  clearInterval(interval: NodeJS.Timeout): void {
+    clearInterval(interval);
+    this.intervals.delete(interval);
+  }
+
+  cleanup(): void {
+    this.timers.forEach(timer => clearTimeout(timer));
+    this.intervals.forEach(interval => clearInterval(interval));
+    this.timers.clear();
+    this.intervals.clear();
+    console.log(' Timer cleanup completed');
+  }
+}
+
+// Global timer manager
+const timerManager = new TimerManager();
 
 // Performance optimization variables
 let achievementCheckCounter = 0;
@@ -208,7 +258,7 @@ class KeystrokeTracker {
   private rendererUpdateTimer: NodeJS.Timeout | null = null;
 
   // Cached data to reduce store access
-  private cachedStats = {
+  public cachedStats = {
     total: 0,
     today: 0,
     streak: 0,
@@ -268,12 +318,25 @@ class KeystrokeTracker {
     this.cachedStats.total++;
     this.cachedStats.today++;
 
-    // Batch data persistence to reduce disk I/O
-    if (this.batchedUpdates >= this.BATCH_SIZE) {
+    // FIRST-TIME USER EXPERIENCE: Immediate feedback for first keystroke
+    const isFirstKeystroke = !store.get('hasTypedFirstKeystroke');
+    const shouldImmediateSave = (
+      isFirstKeystroke ||                           // First keystroke ever - immediate save!
+      this.batchedUpdates >= this.BATCH_SIZE ||     // Normal batching
+      this.cachedStats.total % 1000 === 1          // Every 1000th keystroke for milestones
+    );
+
+    if (shouldImmediateSave) {
       this.flushBatchedUpdates();
+
+      // First keystroke setup
+      if (isFirstKeystroke) {
+        store.set('hasTypedFirstKeystroke', true);
+        this.showWelcomeNotification();
+      }
     } else if (!this.batchUpdateTimer) {
       // Ensure updates are flushed even with low typing rates
-      this.batchUpdateTimer = setTimeout(() => {
+      this.batchUpdateTimer = timerManager.addTimeout(() => {
         this.flushBatchedUpdates();
       }, this.UPDATE_DEBOUNCE_MS);
     }
@@ -289,24 +352,45 @@ class KeystrokeTracker {
     if (this.batchedUpdates === 0) return;
 
     try {
-      // Batch all store operations together
-      store.set('totalKeystrokes', this.cachedStats.total);
-
-      // Update today's keystroke data
+      // FIXED: Store all critical data atomically
       const today = new Date().toISOString().split('T')[0];
-      const dailyData = store.get('dailyKeystrokes') || {};
-      dailyData[today] = this.cachedStats.today;
-      store.set('dailyKeystrokes', dailyData);
+
+      // Primary storage operations
+      store.set('totalKeystrokes', this.cachedStats.total);
+      store.set(`daily.${today}`, this.cachedStats.today);
+
+      // Backward compatibility - handle gracefully if it fails
+      try {
+        const existingDailyData = store.get('dailyKeystrokes') || {};
+        if (!existingDailyData[today] || existingDailyData[today] !== this.cachedStats.today) {
+          existingDailyData[today] = this.cachedStats.today;
+          store.set('dailyKeystrokes', existingDailyData);
+        }
+      } catch (legacyError) {
+        console.warn('⚠️ Legacy data structure update failed (non-critical):', legacyError);
+      }
 
       this.batchedUpdates = 0;
       this.cachedStats.lastUpdate = Date.now();
 
-      if (this.batchUpdateTimer) {
-        clearTimeout(this.batchUpdateTimer);
-        this.batchUpdateTimer = null;
-      }
+      // FIXED: Clean up timer safely
+      this.clearBatchTimer();
     } catch (error) {
-      console.error(' Error flushing batched updates:', error);
+      console.error('❌ Error flushing batched updates:', error);
+    }
+  }
+
+  private clearBatchTimer() {
+    if (this.batchUpdateTimer) {
+      timerManager.clearTimeout(this.batchUpdateTimer);
+      this.batchUpdateTimer = null;
+    }
+  }
+
+  private clearRendererTimer() {
+    if (this.rendererUpdateTimer) {
+      timerManager.clearTimeout(this.rendererUpdateTimer);
+      this.rendererUpdateTimer = null;
     }
   }
 
@@ -316,7 +400,7 @@ class KeystrokeTracker {
       return; // Update already scheduled
     }
 
-    this.rendererUpdateTimer = setTimeout(() => {
+    this.rendererUpdateTimer = timerManager.addTimeout(() => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         const dailyGoal = store.get('dailyGoal') || 5000;
 
@@ -330,7 +414,13 @@ class KeystrokeTracker {
         });
       }
 
-      this.rendererUpdateTimer = null;
+      // Update tray display when keystroke data changes
+      updateTrayDisplay();
+
+      // Update widget if enabled
+      updateWidget();
+
+      this.clearRendererTimer();
     }, this.UPDATE_DEBOUNCE_MS);
   }
 
@@ -351,7 +441,7 @@ class KeystrokeTracker {
       this.lastAchievementCheck = now;
 
       // Run achievement checks asynchronously to avoid blocking
-      setTimeout(() => {
+      timerManager.addTimeout(() => {
         try {
           // Get required data for achievement checking
           const currentAchievements = store.get('achievements') || [];
@@ -385,16 +475,56 @@ class KeystrokeTracker {
     }
   }
 
+  private showWelcomeNotification() {
+    // Don't show multiple welcome notifications
+    if (store.get('hasShownWelcomeNotification')) return;
+
+    console.log('🎉 TypeCount: First keystroke detected! App is now tracking.');
+
+    // FIXED: Always set the flag first to prevent duplicate calls
+    store.set('hasShownWelcomeNotification', true);
+
+    // Show system notification on supported platforms
+    if (Notification && process.platform !== 'linux') {
+      timerManager.addTimeout(() => {
+        try {
+          new Notification('TypeCount Started! 🎉', {
+            body: 'Your first keystroke is tracked! Check the menu bar to see your progress.',
+            icon: path.join(__dirname, '../renderer/assets/icon.png'),
+            silent: true
+          });
+        } catch (error) {
+          console.log('💡 TypeCount is now tracking your keystrokes! Check the menu bar.');
+        }
+      }, 100); // Small delay to ensure UI is ready
+    } else {
+      // Fallback for platforms without notifications (including Linux)
+      console.log('💡 TypeCount is now tracking your keystrokes! Check the menu bar.');
+
+      // For Linux users, create a more visible console message
+      if (process.platform === 'linux') {
+        console.log('\n' + '='.repeat(60));
+        console.log('  TypeCount is now actively tracking your keystrokes!');
+        console.log('  Check the system tray/panel for your keystroke count.');
+        console.log('='.repeat(60) + '\n');
+      }
+    }
+
+    // Force immediate tray update to show the first keystroke
+    timerManager.addTimeout(() => {
+      updateTrayDisplay();
+    }, 200);
+  }
+
   public cleanup() {
-    if (this.batchUpdateTimer) {
-      clearTimeout(this.batchUpdateTimer);
-      this.batchUpdateTimer = null;
-    }
-    if (this.rendererUpdateTimer) {
-      clearTimeout(this.rendererUpdateTimer);
-      this.rendererUpdateTimer = null;
-    }
-    this.flushBatchedUpdates(); // Ensure final data is saved
+    // FIXED: Use dedicated cleanup methods
+    this.clearBatchTimer();
+    this.clearRendererTimer();
+
+    // Ensure final data is saved before cleanup
+    this.flushBatchedUpdates();
+
+    console.log('✓ KeystrokeTracker cleanup completed');
   }
 }
 
@@ -405,7 +535,7 @@ const startKeystrokeTracking = () => {
   // Validation: Check if native module is available and secure
   if (!isNativeModuleAvailable || !uIOhook) {
     console.error(' uIOhook not available - global keystroke monitoring disabled');
-    console.log('💡 Tip: Ensure accessibility permissions are granted and app is restarted');
+    console.log(' Tip: Ensure accessibility permissions are granted and app is restarted');
     return;
   }
 
@@ -417,15 +547,12 @@ const startKeystrokeTracking = () => {
     uIOhook.on('keydown', keystrokeTracker['handleKeystroke']);
 
     uIOhook.start();
-    console.log(' Performance-optimized keystroke tracking started');
-    console.log('📊 Rate limit: 500 events/sec, Batch size: 25, Update delay: 100ms');
-    console.log('🏆 Supports up to 20x world record typing speed (25.4/sec)');
   } catch (error) {
     console.error(' Failed to start global keystroke tracking:', error);
 
     // Platform-specific error handling
     if (process.platform === 'darwin') {
-      console.log('💡 macOS: Check System Preferences → Security & Privacy → Accessibility');
+      console.log(' macOS: Check System Preferences → Security & Privacy → Accessibility');
       requestAccessibilityPermissions();
     }
   }
@@ -451,6 +578,12 @@ const stopKeystrokeTracking = () => {
 
 
 const getTodayKeystrokes = () => {
+  // Use cached value if available, fallback to store only if needed
+  if (keystrokeTracker) {
+    return keystrokeTracker.cachedStats.today;
+  }
+
+  // Fallback for initialization
   const today = new Date().toISOString().split('T')[0];
   return store.get('dailyKeystrokes')[today] || 0;
 };
@@ -484,6 +617,239 @@ const updatePersonalityType = () => {
   const hourlyData = store.get('hourlyKeystrokes');
   const personalityType = determinePersonalityType(hourlyData);
   store.set('personalityType', personalityType);
+};
+
+// Helper functions for tray display
+const formatKeystrokeCount = (count: number): string => {
+  if (count < 1000) {
+    return count.toString();
+  } else if (count < 1000000) {
+    return `${(count / 1000).toFixed(1)}K`;
+  } else if (count < 1000000000) {
+    return `${(count / 1000000).toFixed(1)}M`;
+  } else {
+    return `${(count / 1000000000).toFixed(1)}B`;
+  }
+};
+
+const createDynamicTrayIcon = (count: number): Electron.NativeImage => {
+  const formattedCount = formatKeystrokeCount(count);
+
+  // Create SVG with count text
+  const size = 32;
+  const fontSize = formattedCount.length > 3 ? 8 : formattedCount.length > 2 ? 10 : 12;
+
+  const svg = `
+    <svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="${size/2}" cy="${size/2}" r="${size/2-2}" fill="rgba(0,0,0,0.8)" stroke="white" stroke-width="1"/>
+      <text x="${size/2}" y="${size/2}" text-anchor="middle" dominant-baseline="central"
+            fill="white" font-family="system-ui, -apple-system, sans-serif"
+            font-size="${fontSize}" font-weight="bold">${formattedCount}</text>
+    </svg>
+  `;
+
+  // Convert SVG to data URL
+  const dataURL = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+  return nativeImage.createFromDataURL(dataURL);
+};
+
+const createReadyTrayIcon = (): Electron.NativeImage => {
+  // Create a welcoming "ready" icon for new users
+  const size = 32;
+
+  const svg = `
+    <svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="${size/2}" cy="${size/2}" r="${size/2-2}" fill="rgba(34,139,34,0.8)" stroke="white" stroke-width="1"/>
+      <text x="${size/2}" y="${size/2}" text-anchor="middle" dominant-baseline="central"
+            fill="white" font-family="system-ui, -apple-system, sans-serif"
+            font-size="12" font-weight="bold">✓</text>
+    </svg>
+  `;
+
+  // Convert SVG to data URL
+  const dataURL = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+  return nativeImage.createFromDataURL(dataURL);
+};
+
+const updateTrayDisplay = () => {
+  if (!tray) return;
+
+  // Use cached data when available, fallback to store
+  const totalCount = keystrokeTracker?.cachedStats.total ?? store.get('totalKeystrokes') ?? 0;
+
+  // FIXED: Consistent new user determination using both metrics
+  const hasTypedBefore = store.get('hasTypedFirstKeystroke') || false;
+  const isNewUser = totalCount === 0 && !hasTypedBefore;
+
+  // Show helpful text for new users
+  const displayText = isNewUser ? 'Ready' : formatKeystrokeCount(totalCount);
+
+  if (process.platform === 'darwin') {
+    // macOS: Use setTitle for clean text display
+    tray.setTitle(` ${displayText}`);
+
+    // Use a minimal transparent icon
+    const transparentIcon = nativeImage.createEmpty();
+    transparentIcon.resize({ width: 16, height: 16 });
+    tray.setImage(transparentIcon);
+  } else {
+    // Windows/Linux: Generate dynamic icon with count or ready state
+    const dynamicIcon = isNewUser ?
+      createReadyTrayIcon() :
+      createDynamicTrayIcon(totalCount);
+    tray.setImage(dynamicIcon);
+  }
+
+  // Update tooltip
+  const tooltipText = isNewUser ?
+    'TypeCount: Ready to track keystrokes!' :
+    `TypeCount: ${totalCount.toLocaleString()} total keystrokes`;
+
+  tray.setToolTip(tooltipText);
+};
+
+// Widget window management
+const createWidget = () => {
+  if (widgetWindow && !widgetWindow.isDestroyed()) {
+    widgetWindow.focus();
+    return;
+  }
+
+  widgetWindow = new BrowserWindow({
+    width: 180,
+    height: 80,
+    x: 50, // Top-left positioning
+    y: 50,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    movable: true,
+    minimizable: false,
+    maximizable: false,
+    closable: false,
+    focusable: false,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false
+    }
+  });
+
+  // Make widget always on top, even over fullscreen apps
+  widgetWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+  widgetWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+
+  // Load widget HTML content
+  const widgetHTML = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <style>
+        body {
+          margin: 0;
+          padding: 0;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          background: rgba(0, 0, 0, 0.7);
+          backdrop-filter: blur(10px);
+          border-radius: 8px;
+          color: white;
+          overflow: hidden;
+          cursor: move;
+          -webkit-app-region: drag;
+        }
+        .widget-content {
+          padding: 10px;
+          text-align: center;
+          -webkit-app-region: no-drag;
+        }
+        .title {
+          font-size: 11px;
+          opacity: 0.8;
+          margin-bottom: 2px;
+        }
+        .count {
+          font-size: 18px;
+          font-weight: bold;
+          margin-bottom: 2px;
+        }
+        .today {
+          font-size: 10px;
+          opacity: 0.7;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="widget-content">
+        <div class="title">TypeCount</div>
+        <div class="count" id="total-count">0</div>
+        <div class="today" id="today-count">Today: 0</div>
+      </div>
+      <script>
+        // Widget update function
+        const updateWidget = (data) => {
+          const totalEl = document.getElementById('total-count');
+          const todayEl = document.getElementById('today-count');
+
+          if (totalEl) {
+            totalEl.textContent = formatNumber(data.total || 0);
+          }
+          if (todayEl) {
+            todayEl.textContent = 'Today: ' + formatNumber(data.today || 0);
+          }
+        };
+
+        const formatNumber = (num) => {
+          if (num < 1000) return num.toString();
+          if (num < 1000000) return (num / 1000).toFixed(1) + 'K';
+          if (num < 1000000000) return (num / 1000000).toFixed(1) + 'M';
+          return (num / 1000000000).toFixed(1) + 'B';
+        };
+
+        // Listen for updates from main process
+        const { ipcRenderer } = require('electron');
+
+        ipcRenderer.on('widget-update', (event, data) => {
+          updateWidget(data);
+        });
+
+        // Request initial data
+        ipcRenderer.send('widget-request-data');
+      </script>
+    </body>
+    </html>
+  `;
+
+  widgetWindow.loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(widgetHTML)}`);
+
+  widgetWindow.on('closed', () => {
+    widgetWindow = null;
+  });
+
+  // Prevent widget from being focused
+  widgetWindow.on('focus', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.focus();
+    }
+  });
+};
+
+const destroyWidget = () => {
+  if (widgetWindow && !widgetWindow.isDestroyed()) {
+    widgetWindow.close();
+    widgetWindow = null;
+  }
+};
+
+const updateWidget = () => {
+  if (widgetWindow && !widgetWindow.isDestroyed() && keystrokeTracker) {
+    // Use cached data instead of expensive store operations
+    widgetWindow.webContents.send('widget-update', {
+      total: keystrokeTracker.cachedStats.total,
+      today: keystrokeTracker.cachedStats.today
+    });
+  }
 };
 
 const checkForNewAchievements = (totalKeystrokes: number, streakDays: number, hourlyData: Record<string, number[]>) => {
@@ -704,7 +1070,7 @@ const setupAutoUpdater = () => {
   });
 
   // Check for updates every hour
-  setInterval(() => {
+  timerManager.addInterval(() => {
     autoUpdater.checkForUpdatesAndNotify();
   }, 60 * 60 * 1000);
 
@@ -760,19 +1126,46 @@ const setupAutoUpdater = () => {
 };
 
 const createTray = () => {
-  // Create tray icon
+  // Create initial tray with proper icon
   const iconPath = path.join(__dirname, '../renderer/assets/icon.png');
   let trayIcon = nativeImage.createFromPath(iconPath);
 
   // Fallback to a simple icon if the file doesn't exist
   if (trayIcon.isEmpty()) {
-    // Create a simple 16x16 icon programmatically
-    trayIcon = nativeImage.createEmpty();
+    // Create a minimal default icon
+    if (process.platform === 'darwin') {
+      // macOS: Create minimal transparent icon since we'll use setTitle
+      trayIcon = nativeImage.createEmpty();
+      trayIcon.resize({ width: 16, height: 16 });
+    } else {
+      // Windows/Linux: Create initial dynamic icon
+      trayIcon = createDynamicTrayIcon(store.get('totalKeystrokes') || 0);
+    }
   }
 
   tray = new Tray(trayIcon);
 
-  const contextMenu = Menu.buildFromTemplate([
+  // Set initial display
+  updateTrayDisplay();
+
+  // FIXED: Consistent new user determination for tray menu
+  const totalCount = store.get('totalKeystrokes') ?? 0;
+  const hasTypedBefore = store.get('hasTypedFirstKeystroke') || false;
+  const isNewUser = totalCount === 0 && !hasTypedBefore;
+
+  const initialMenu = isNewUser ? [
+    {
+      label: '✨ TypeCount Ready!',
+      enabled: false
+    },
+    {
+      label: 'Start typing to track keystrokes...',
+      enabled: false
+    },
+    { type: 'separator' as const },
+  ] : [];
+
+  const statsMenu = [
     {
       label: `Total: ${store.get('totalKeystrokes').toLocaleString()} keystrokes`,
       enabled: false
@@ -785,6 +1178,11 @@ const createTray = () => {
       label: `Streak: ${store.get('streakDays')} days`,
       enabled: false
     },
+  ];
+
+  const contextMenu = Menu.buildFromTemplate([
+    ...initialMenu,
+    ...statsMenu,
     { type: 'separator' },
     {
       label: 'Open Dashboard',
@@ -793,6 +1191,21 @@ const createTray = () => {
           createWindow();
         } else {
           mainWindow.show();
+        }
+      }
+    },
+    {
+      label: 'Show Desktop Widget',
+      type: 'checkbox',
+      checked: store.get('widgetEnabled') || false,
+      click: (menuItem) => {
+        const enabled = menuItem.checked;
+        store.set('widgetEnabled', enabled);
+
+        if (enabled) {
+          createWidget();
+        } else {
+          destroyWidget();
         }
       }
     },
@@ -817,8 +1230,9 @@ const createTray = () => {
     },
     { type: 'separator' },
     {
-      label: 'Quit',
+      label: 'Quit TypeCount',
       click: () => {
+        isQuitting = true;
         app.quit();
       }
     }
@@ -827,19 +1241,38 @@ const createTray = () => {
   tray.setToolTip('TypeCount - Keystroke Tracker');
   tray.setContextMenu(contextMenu);
 
-  // Update tray menu periodically
-  setInterval(() => {
+  // Add click handler to show/hide window
+  tray.on('click', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      createWindow();
+    } else if (mainWindow.isVisible()) {
+      mainWindow.hide();
+    } else {
+      mainWindow.show();
+    }
+  });
+
+  // Update tray display and menu periodically
+  timerManager.addInterval(() => {
+    // Update the tray display (count in menubar/icon)
+    updateTrayDisplay();
+
+    // Update the context menu with latest data (use cached when available)
+    const totalCount = keystrokeTracker?.cachedStats.total ?? store.get('totalKeystrokes');
+    const todayCount = keystrokeTracker?.cachedStats.today ?? getTodayKeystrokes();
+    const streakDays = keystrokeTracker?.cachedStats.streak ?? store.get('streakDays');
+
     const updatedMenu = Menu.buildFromTemplate([
       {
-        label: `Total: ${store.get('totalKeystrokes').toLocaleString()} keystrokes`,
+        label: `Total: ${totalCount.toLocaleString()} keystrokes`,
         enabled: false
       },
       {
-        label: `Today: ${getTodayKeystrokes().toLocaleString()} keystrokes`,
+        label: `Today: ${todayCount.toLocaleString()} keystrokes`,
         enabled: false
       },
       {
-        label: `Streak: ${store.get('streakDays')} days`,
+        label: `Streak: ${streakDays} days`,
         enabled: false
       },
       { type: 'separator' },
@@ -850,6 +1283,21 @@ const createTray = () => {
             createWindow();
           } else {
             mainWindow.show();
+          }
+        }
+      },
+      {
+        label: 'Show Desktop Widget',
+        type: 'checkbox',
+        checked: store.get('widgetEnabled') || false,
+        click: (menuItem) => {
+          const enabled = menuItem.checked;
+          store.set('widgetEnabled', enabled);
+
+          if (enabled) {
+            createWidget();
+          } else {
+            destroyWidget();
           }
         }
       },
@@ -874,14 +1322,15 @@ const createTray = () => {
       },
       { type: 'separator' },
       {
-        label: 'Quit',
+        label: 'Quit TypeCount',
         click: () => {
+          isQuitting = true;
           app.quit();
         }
       }
     ]);
     tray?.setContextMenu(updatedMenu);
-  }, 5000); // Update every 5 seconds
+  }, 3000); // Update every 3 seconds for responsive display
 };
 
 const createWindow = () => {
@@ -912,10 +1361,32 @@ const createWindow = () => {
     );
   }
 
-  // Don't open DevTools in production
+  // Don't open DevTools in production to avoid autofill errors
   if (process.env.NODE_ENV === 'development') {
-    mainWindow.webContents.openDevTools();
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
+
+    // Suppress autofill-related warnings in DevTools
+    mainWindow.webContents.on('devtools-opened', () => {
+      mainWindow.webContents.devToolsWebContents?.executeJavaScript(`
+        console.clear();
+        console.log('%c TypeCount DevTools Ready', 'color: #00ff00; font-weight: bold;');
+      `);
+    });
   }
+
+  // Hide window to tray instead of closing
+  mainWindow.on('close', (event) => {
+    if (!isQuitting) {
+      event.preventDefault();
+      mainWindow?.hide();
+
+      // Show notification on first hide (optional)
+      if (!store.get('hasShownTrayNotification')) {
+        // You could add a notification here if desired
+        store.set('hasShownTrayNotification', true);
+      }
+    }
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -996,6 +1467,18 @@ ipcMain.on('create-goal', (event, goalData) => {
   });
 });
 
+// IPC handlers for widget communication
+ipcMain.on('widget-request-data', (event) => {
+  event.reply('widget-update', {
+    total: store.get('totalKeystrokes') || 0,
+    today: getTodayKeystrokes()
+  });
+});
+
+// Hide app from dock/taskbar completely (like Raycast)
+app.dock?.hide();
+
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 app.whenReady().then(async () => {
@@ -1023,9 +1506,13 @@ app.whenReady().then(async () => {
     console.error('Failed to set up auto-launch:', error);
   }
 
-  // Show window on startup for testing
-  createWindow();
+  // Don't show window on startup - silent background launch like Raycast
+  // Window will only open when user clicks tray or "Open Dashboard"
 
+  // Initialize widget if enabled
+  if (store.get('widgetEnabled')) {
+    createWidget();
+  }
 
   // Set up auto-updater
   setupAutoUpdater();
@@ -1038,19 +1525,20 @@ app.on('window-all-closed', (e: Event) => {
 });
 
 app.on('activate', () => {
-  // On OS X it's common to re-create a window in the app when the
-  // dock icon is clicked and there are no other windows open.
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
+  // Silent background app like Raycast - don't auto-open window on activate
+  // Users can open dashboard via tray menu if needed
 });
 
 // Clean up on quit
 app.on('before-quit', () => {
+  isQuitting = true;
   stopKeystrokeTracking();
+  destroyWidget();
+  timerManager.cleanup(); // Clean up all timers to prevent memory leaks
 });
 
 // Handle app updates
-app.on('will-quit', () => {
-  // Save any pending data
+app.on('will-quit', (event) => {
+  isQuitting = true;
+  // Save any pending data before quitting
 });
