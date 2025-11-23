@@ -30,42 +30,37 @@ let isNativeModuleAvailable = false;
 function loadNativeModuleSecurely(): boolean {
   try {
     if (app.isPackaged) {
-      const nativeModulePath = path.join(process.resourcesPath, 'uiohook_napi.node');
+      // In production, we copied uiohook-napi to resources/node_modules/uiohook-napi
+      // We point to the module directory, and require() will find package.json -> main
+      const nativeModulePath = path.join(process.resourcesPath, 'node_modules', 'uiohook-napi');
+      
+      console.log('Checking for uiohook-napi at:', nativeModulePath);
 
-      if (!fs.existsSync(nativeModulePath)) {
-        console.error(' Native module not found:', nativeModulePath);
-        return false;
+      if (fs.existsSync(nativeModulePath)) {
+        // We use require() on the directory. Node will find package.json, then load dist/index.js.
+        // dist/index.js will require('node-gyp-build').
+        // Since node-gyp-build is in resources/node_modules/node-gyp-build, it should be found.
+        const uiohookModule: UiohookModule = require(nativeModulePath);
+        uIOhook = uiohookModule.uIOhook;
+        UiohookKey = uiohookModule.UiohookKey;
+        console.log('✓ uiohook-napi loaded successfully from resources/node_modules');
+      } else {
+        console.error('✗ uiohook-napi not found in resources/node_modules');
+        // Fallback to standard require just in case
+        const uiohookModule: UiohookModule = require('uiohook-napi');
+        uIOhook = uiohookModule.uIOhook;
+        UiohookKey = uiohookModule.UiohookKey;
       }
-
-      const stats = fs.statSync(nativeModulePath);
-      const fileSizeKB = stats.size / 1024;
-
-      // Reasonable size limits (uiohook_napi.node should be ~80-200KB)
-      if (stats.size === 0 || fileSizeKB > 10000) {
-        console.error(' Native module file size suspicious:', fileSizeKB, 'KB');
-        return false;
-      }
-
-      if (!stats.isFile()) {
-        console.error(' Native module path is not a regular file');
-        return false;
-      }
-
-      console.log(' Native module integrity verified:', fileSizeKB.toFixed(1), 'KB');
-
-      const uiohookModule: UiohookModule = require(nativeModulePath);
-      uIOhook = uiohookModule.uIOhook;
-      UiohookKey = uiohookModule.UiohookKey;
     } else {
       // Development: Use standard import
       const uiohookModule: UiohookModule = require('uiohook-napi');
       uIOhook = uiohookModule.uIOhook;
       UiohookKey = uiohookModule.UiohookKey;
-      console.log(' Development mode: uiohook-napi loaded from node_modules');
+      console.log('✓ Development mode: uiohook-napi loaded from node_modules');
     }
 
     if (!uIOhook || typeof uIOhook.start !== 'function') {
-      console.error(' Invalid uIOhook module structure');
+      console.error('✗ Invalid uIOhook module structure');
       return false;
     }
 

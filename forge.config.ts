@@ -8,6 +8,8 @@ import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { AutoUnpackNativesPlugin } from '@electron-forge/plugin-auto-unpack-natives';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
+import fs from 'fs-extra';
+import path from 'path';
 
 const config: ForgeConfig = {
   packagerConfig: {
@@ -27,8 +29,7 @@ const config: ForgeConfig = {
 
     // Windows specific - request admin elevation
     win32metadata: {
-      'requested-execution-level': 'requireAdministrator',
-      'application-manifest': './app.manifest'
+      'requested-execution-level': 'requireAdministrator'
     } as any,
 
     // macOS specific
@@ -36,9 +37,7 @@ const config: ForgeConfig = {
     // osxNotarize: false, // Set to notarization config when ready
 
     // ASAR and native modules
-    asar: {
-      unpack: "**/{*.node,*.dylib,*.so,*.dll}"
-    },
+    asar: true,
     extraResource: [
       "assets"
     ],
@@ -104,6 +103,40 @@ const config: ForgeConfig = {
       }
     }),
   ],
+  hooks: {
+    postPackage: async (config, packageResult) => {
+      // Manually copy native modules and their dependencies to resources/node_modules
+      // This ensures they are available at runtime even if excluded from the bundle
+      const resourcesPath = path.join(packageResult.outputPaths[0], 'resources');
+      const nodeModulesPath = path.join(resourcesPath, 'node_modules');
+      
+      console.log(`Copying native modules to ${nodeModulesPath}...`);
+      
+      await fs.ensureDir(nodeModulesPath);
+      
+      // List of modules to copy (including dependencies)
+      const modulesToCopy = [
+        'uiohook-napi',
+        'node-gyp-build'
+      ];
+      
+      for (const moduleName of modulesToCopy) {
+        const srcPath = path.resolve(__dirname, 'node_modules', moduleName);
+        const destPath = path.join(nodeModulesPath, moduleName);
+        
+        if (await fs.pathExists(srcPath)) {
+          console.log(`  Copying ${moduleName}...`);
+          await fs.copy(srcPath, destPath, {
+            dereference: true,
+            filter: (src) => !src.includes('.bin') && !src.includes('obj') // Skip unnecessary files
+          });
+        } else {
+          console.warn(`  Warning: Could not find ${moduleName} in node_modules`);
+        }
+      }
+      console.log('Native modules copied successfully.');
+    }
+  },
   plugins: [
     new AutoUnpackNativesPlugin({}),
     new VitePlugin({

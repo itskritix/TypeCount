@@ -18,9 +18,12 @@ Professional keystroke analytics and productivity tracking application. Monitor 
 ## 📥 Download & Installation
 
 ### Windows
-1. Download `TypeCount Setup.exe` from [Releases](https://github.com/itskritix/TypeCount/releases)
+1. Download `TypeCount-Setup.exe` from [Releases](https://github.com/itskritix/TypeCount/releases)
 2. Run the installer
-3. TypeCount will start automatically
+3. **IMPORTANT**: Right-click TypeCount → Properties → Compatibility → Check "Run as administrator"
+4. TypeCount will start automatically
+
+> ⚠️ **Administrator rights required**: TypeCount needs admin privileges to track keystrokes on Windows. See [PERMISSIONS.md](PERMISSIONS.md) for detailed setup.
 
 ### macOS
 1. Download `TypeCount.dmg` from [Releases](https://github.com/itskritix/TypeCount/releases)
