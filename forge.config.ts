@@ -33,7 +33,8 @@ const config: ForgeConfig = {
       unpack: "**/{*.node,*.dylib,*.so,*.dll}"
     },
     extraResource: [
-      "node_modules/uiohook-napi/build/Release/uiohook_napi.node"
+      "node_modules/uiohook-napi/build/Release/uiohook_napi.node",
+      "assets"
     ],
 
     // Additional metadata

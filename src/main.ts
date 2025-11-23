@@ -30,16 +30,14 @@ let isNativeModuleAvailable = false;
 function loadNativeModuleSecurely(): boolean {
   try {
     if (app.isPackaged) {
-      // Production: Load from verified extraResource location
       const nativeModulePath = path.join(process.resourcesPath, 'uiohook_napi.node');
 
-      // Security Check 1: Verify file exists
+      // Verify file exists and validate properties
       if (!fs.existsSync(nativeModulePath)) {
         console.error(' Native module not found at expected location:', nativeModulePath);
         return false;
       }
 
-      // Security Check 2: Validate file properties
       const stats = fs.statSync(nativeModulePath);
       const fileSizeKB = stats.size / 1024;
 
@@ -49,7 +47,6 @@ function loadNativeModuleSecurely(): boolean {
         return false;
       }
 
-      // Security Check 3: Verify file permissions
       if (!stats.isFile()) {
         console.error(' Native module path is not a regular file');
         return false;
@@ -57,7 +54,6 @@ function loadNativeModuleSecurely(): boolean {
 
       console.log(' Native module integrity verified:', fileSizeKB.toFixed(1), 'KB');
 
-      // Load with controlled path
       const uiohookModule: UiohookModule = require(nativeModulePath);
       uIOhook = uiohookModule.uIOhook;
       UiohookKey = uiohookModule.UiohookKey;
@@ -69,7 +65,6 @@ function loadNativeModuleSecurely(): boolean {
       console.log(' Development mode: uiohook-napi loaded from node_modules');
     }
 
-    // Final validation
     if (!uIOhook || typeof uIOhook.start !== 'function') {
       console.error(' Invalid uIOhook module structure');
       return false;
@@ -84,6 +79,15 @@ function loadNativeModuleSecurely(): boolean {
 
 // Initialize native module with security checks
 isNativeModuleAvailable = loadNativeModuleSecurely();
+
+// Helper to get icon path in both dev and prod
+const getAppIconPath = (): string => {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'assets', 'logo.png');
+  }
+  // In dev, we are in .vite/build/main.js, so we go up to root
+  return path.join(__dirname, '../../assets/logo.png');
+};
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -155,6 +159,7 @@ interface StoreSchema {
   averageSessionLength: number;
   hasTypedFirstKeystroke: boolean; // Track if user has typed anything
   hasShownWelcomeNotification: boolean;
+  widgetPosition?: { x: number, y: number };
 }
 
 const store = new Store<StoreSchema>({
@@ -171,6 +176,7 @@ const store = new Store<StoreSchema>({
     lastActiveDate: new Date().toISOString(),
     autoLaunchEnabled: true,
     widgetEnabled: false,
+    widgetPosition: { x: 50, y: 50 },
     challenges: [],
     goals: [],
     userLevel: 1,
@@ -295,9 +301,9 @@ class KeystrokeTracker {
           console.warn('⚠️  Keystroke rate too high, activating circuit breaker');
           this.isOverloaded = true;
         }
-        return; // Drop event
+        return;
       }
-      return; // Skip this event due to rate limiting
+      return;
     }
 
     // Reset overload state if we're back to normal rates
@@ -308,43 +314,37 @@ class KeystrokeTracker {
     }
 
     this.lastEventTime = now;
-    this.eventCount = Math.max(0, this.eventCount - 1); // Decay event count
+    this.eventCount = Math.max(0, this.eventCount - 1);
 
     // Count keystroke (privacy-first: no actual key data stored)
     keystrokeCount++;
     this.batchedUpdates++;
 
-    // Update cached stats immediately for responsiveness
     this.cachedStats.total++;
     this.cachedStats.today++;
 
-    // FIRST-TIME USER EXPERIENCE: Immediate feedback for first keystroke
+    // Immediate feedback for first keystroke
     const isFirstKeystroke = !store.get('hasTypedFirstKeystroke');
     const shouldImmediateSave = (
-      isFirstKeystroke ||                           // First keystroke ever - immediate save!
-      this.batchedUpdates >= this.BATCH_SIZE ||     // Normal batching
-      this.cachedStats.total % 1000 === 1          // Every 1000th keystroke for milestones
+      isFirstKeystroke ||
+      this.batchedUpdates >= this.BATCH_SIZE ||
+      this.cachedStats.total % 1000 === 1
     );
 
     if (shouldImmediateSave) {
       this.flushBatchedUpdates();
 
-      // First keystroke setup
       if (isFirstKeystroke) {
         store.set('hasTypedFirstKeystroke', true);
         this.showWelcomeNotification();
       }
     } else if (!this.batchUpdateTimer) {
-      // Ensure updates are flushed even with low typing rates
       this.batchUpdateTimer = timerManager.addTimeout(() => {
         this.flushBatchedUpdates();
       }, this.UPDATE_DEBOUNCE_MS);
     }
 
-    // Debounced renderer updates to prevent overwhelming IPC
     this.scheduleRendererUpdate();
-
-    // Periodic achievement checks (optimized frequency)
     this.checkAchievementsThrottled();
   };
 
@@ -361,10 +361,10 @@ class KeystrokeTracker {
 
       // Backward compatibility - handle gracefully if it fails
       try {
-        const existingDailyData = store.get('dailyKeystrokes') || {};
+        const existingDailyData = store.get('dailyKeystrokeData') || {};
         if (!existingDailyData[today] || existingDailyData[today] !== this.cachedStats.today) {
           existingDailyData[today] = this.cachedStats.today;
-          store.set('dailyKeystrokes', existingDailyData);
+          store.set('dailyKeystrokeData', existingDailyData);
         }
       } catch (legacyError) {
         console.warn('⚠️ Legacy data structure update failed (non-critical):', legacyError);
@@ -490,7 +490,7 @@ class KeystrokeTracker {
         try {
           new Notification('TypeCount Started! 🎉', {
             body: 'Your first keystroke is tracked! Check the menu bar to see your progress.',
-            icon: path.join(__dirname, '../renderer/assets/icon.png'),
+            icon: getAppIconPath(),
             silent: true
           });
         } catch (error) {
@@ -674,33 +674,21 @@ const createReadyTrayIcon = (): Electron.NativeImage => {
 const updateTrayDisplay = () => {
   if (!tray) return;
 
-  // Use cached data when available, fallback to store
   const totalCount = keystrokeTracker?.cachedStats.total ?? store.get('totalKeystrokes') ?? 0;
-
-  // FIXED: Consistent new user determination using both metrics
   const hasTypedBefore = store.get('hasTypedFirstKeystroke') || false;
   const isNewUser = totalCount === 0 && !hasTypedBefore;
 
-  // Show helpful text for new users
   const displayText = isNewUser ? 'Ready' : formatKeystrokeCount(totalCount);
 
   if (process.platform === 'darwin') {
-    // macOS: Use setTitle for clean text display
     tray.setTitle(` ${displayText}`);
-
-    // Use a minimal transparent icon
     const transparentIcon = nativeImage.createEmpty();
     transparentIcon.resize({ width: 16, height: 16 });
     tray.setImage(transparentIcon);
   } else {
-    // Windows/Linux: Generate dynamic icon with count or ready state
-    const dynamicIcon = isNewUser ?
-      createReadyTrayIcon() :
-      createDynamicTrayIcon(totalCount);
-    tray.setImage(dynamicIcon);
+    // Windows/Linux: Use static app logo, count in tooltip
   }
 
-  // Update tooltip
   const tooltipText = isNewUser ?
     'TypeCount: Ready to track keystrokes!' :
     `TypeCount: ${totalCount.toLocaleString()} total keystrokes`;
@@ -715,30 +703,42 @@ const createWidget = () => {
     return;
   }
 
+  const isMac = process.platform === 'darwin';
+  const widgetPosition = store.get('widgetPosition') as { x: number, y: number } | undefined;
+
   widgetWindow = new BrowserWindow({
     width: 180,
     height: 80,
-    x: 50, // Top-left positioning
-    y: 50,
+    x: widgetPosition?.x || 50,
+    y: widgetPosition?.y || 50,
     frame: false,
     transparent: true,
-    alwaysOnTop: true,
+    alwaysOnTop: false,
     skipTaskbar: true,
     resizable: false,
     movable: true,
     minimizable: false,
     maximizable: false,
-    closable: false,
+    closable: true,
     focusable: false,
+    type: isMac ? 'desktop' : 'toolbar',
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false
     }
   });
 
-  // Make widget always on top, even over fullscreen apps
-  widgetWindow.setAlwaysOnTop(true, 'screen-saver', 1);
-  widgetWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  // Save position when moved
+  widgetWindow.on('moved', () => {
+    if (widgetWindow) {
+      const [x, y] = widgetWindow.getPosition();
+      store.set('widgetPosition', { x, y });
+    }
+  });
+
+  if (isMac) {
+    widgetWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false });
+  }
 
   // Load widget HTML content
   const widgetHTML = `
@@ -758,11 +758,11 @@ const createWidget = () => {
           overflow: hidden;
           cursor: move;
           -webkit-app-region: drag;
+          user-select: none;
         }
         .widget-content {
           padding: 10px;
           text-align: center;
-          -webkit-app-region: no-drag;
         }
         .title {
           font-size: 11px;
@@ -787,7 +787,6 @@ const createWidget = () => {
         <div class="today" id="today-count">Today: 0</div>
       </div>
       <script>
-        // Widget update function
         const updateWidget = (data) => {
           const totalEl = document.getElementById('total-count');
           const todayEl = document.getElementById('today-count');
@@ -807,14 +806,12 @@ const createWidget = () => {
           return (num / 1000000000).toFixed(1) + 'B';
         };
 
-        // Listen for updates from main process
         const { ipcRenderer } = require('electron');
 
         ipcRenderer.on('widget-update', (event, data) => {
           updateWidget(data);
         });
 
-        // Request initial data
         ipcRenderer.send('widget-request-data');
       </script>
     </body>
@@ -825,6 +822,9 @@ const createWidget = () => {
 
   widgetWindow.on('closed', () => {
     widgetWindow = null;
+    if (store.get('widgetEnabled')) {
+      store.set('widgetEnabled', false);
+    }
   });
 
   // Prevent widget from being focused
@@ -1061,11 +1061,9 @@ const requestAccessibilityPermissions = async () => {
 
 // Configure auto-updater
 const setupAutoUpdater = () => {
-  // Configure update server
-  // For GitHub releases (default)
   autoUpdater.setFeedURL({
     provider: 'github',
-    owner: 'itskritix', // Replace with your GitHub username
+    owner: 'itskritix',
     repo: 'TypeCount'
   });
 
@@ -1074,10 +1072,8 @@ const setupAutoUpdater = () => {
     autoUpdater.checkForUpdatesAndNotify();
   }, 60 * 60 * 1000);
 
-  // Check for updates on startup
   autoUpdater.checkForUpdatesAndNotify();
 
-  // Auto-updater events
   autoUpdater.on('checking-for-update', () => {
     console.log('Checking for update...');
   });
@@ -1126,29 +1122,21 @@ const setupAutoUpdater = () => {
 };
 
 const createTray = () => {
-  // Create initial tray with proper icon
-  const iconPath = path.join(__dirname, '../renderer/assets/icon.png');
+  const iconPath = getAppIconPath();
   let trayIcon = nativeImage.createFromPath(iconPath);
 
-  // Fallback to a simple icon if the file doesn't exist
   if (trayIcon.isEmpty()) {
-    // Create a minimal default icon
     if (process.platform === 'darwin') {
-      // macOS: Create minimal transparent icon since we'll use setTitle
       trayIcon = nativeImage.createEmpty();
       trayIcon.resize({ width: 16, height: 16 });
     } else {
-      // Windows/Linux: Create initial dynamic icon
       trayIcon = createDynamicTrayIcon(store.get('totalKeystrokes') || 0);
     }
   }
 
   tray = new Tray(trayIcon);
-
-  // Set initial display
   updateTrayDisplay();
 
-  // FIXED: Consistent new user determination for tray menu
   const totalCount = store.get('totalKeystrokes') ?? 0;
   const hasTypedBefore = store.get('hasTypedFirstKeystroke') || false;
   const isNewUser = totalCount === 0 && !hasTypedBefore;
@@ -1241,7 +1229,6 @@ const createTray = () => {
   tray.setToolTip('TypeCount - Keystroke Tracker');
   tray.setContextMenu(contextMenu);
 
-  // Add click handler to show/hide window
   tray.on('click', () => {
     if (!mainWindow || mainWindow.isDestroyed()) {
       createWindow();
@@ -1252,12 +1239,9 @@ const createTray = () => {
     }
   });
 
-  // Update tray display and menu periodically
   timerManager.addInterval(() => {
-    // Update the tray display (count in menubar/icon)
     updateTrayDisplay();
 
-    // Update the context menu with latest data (use cached when available)
     const totalCount = keystrokeTracker?.cachedStats.total ?? store.get('totalKeystrokes');
     const todayCount = keystrokeTracker?.cachedStats.today ?? getTodayKeystrokes();
     const streakDays = keystrokeTracker?.cachedStats.streak ?? store.get('streakDays');
@@ -1330,7 +1314,7 @@ const createTray = () => {
       }
     ]);
     tray?.setContextMenu(updatedMenu);
-  }, 3000); // Update every 3 seconds for responsive display
+  }, 3000);
 };
 
 const createWindow = () => {
@@ -1343,7 +1327,7 @@ const createWindow = () => {
       contextIsolation: true,
       nodeIntegration: false
     },
-    icon: path.join(__dirname, '../renderer/assets/icon.png'),
+    icon: getAppIconPath(),
     title: 'TypeCount Dashboard'
   });
 
@@ -1479,21 +1463,15 @@ ipcMain.on('widget-request-data', (event) => {
 app.dock?.hide();
 
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
+// App initialization
 app.whenReady().then(async () => {
-  // Request permissions on macOS
   if (process.platform === 'darwin') {
     requestAccessibilityPermissions();
   }
 
-  // Create tray icon
   createTray();
-
-  // Start tracking keystrokes
   startKeystrokeTracking();
 
-  // Set up auto-launch based on user preference
   const autoLaunchEnabled = store.get('autoLaunchEnabled');
   try {
     const isEnabled = await autoLauncher.isEnabled();
@@ -1506,39 +1484,28 @@ app.whenReady().then(async () => {
     console.error('Failed to set up auto-launch:', error);
   }
 
-  // Don't show window on startup - silent background launch like Raycast
-  // Window will only open when user clicks tray or "Open Dashboard"
-
-  // Initialize widget if enabled
   if (store.get('widgetEnabled')) {
     createWidget();
   }
 
-  // Set up auto-updater
   setupAutoUpdater();
 });
 
-// Prevent app from quitting when window is closed
 app.on('window-all-closed', (e: Event) => {
   e.preventDefault();
-  // App keeps running in the background
 });
 
 app.on('activate', () => {
-  // Silent background app like Raycast - don't auto-open window on activate
-  // Users can open dashboard via tray menu if needed
+  // Silent background app
 });
 
-// Clean up on quit
 app.on('before-quit', () => {
   isQuitting = true;
   stopKeystrokeTracking();
   destroyWidget();
-  timerManager.cleanup(); // Clean up all timers to prevent memory leaks
+  timerManager.cleanup();
 });
 
-// Handle app updates
 app.on('will-quit', (event) => {
   isQuitting = true;
-  // Save any pending data before quitting
 });

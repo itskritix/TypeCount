@@ -10,9 +10,9 @@
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "lint": "eslint --ext .ts,.tsx .",
-    "rebuild": "npx @electron/rebuild --version=39.2.3 --arch=arm64",
-    "rebuild:uiohook": "npx @electron/rebuild --version=39.2.3 --arch=arm64 --module-dir node_modules/uiohook-napi",
-    "postinstall": "npx @electron/rebuild --version=39.2.3 --arch=arm64"
+    "rebuild": "npx @electron/rebuild --version=39.2.3",
+    "rebuild:uiohook": "npx @electron/rebuild --version=39.2.3 --module-dir node_modules/uiohook-napi",
+    "postinstall": "npx @electron/rebuild --version=39.2.3"
   },
   "keywords": [
     "productivity",
