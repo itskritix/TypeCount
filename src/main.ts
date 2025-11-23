@@ -583,7 +583,17 @@ const stopKeystrokeTracking = () => {
 };
 
 
-const getTodayKeystrokes = () => {
+const getTotalKeystrokes = (): number => {
+  // Use cached value if available, fallback to store only if needed
+  if (keystrokeTracker) {
+    return keystrokeTracker.cachedStats.total;
+  }
+
+  // Fallback for initialization
+  return store.get('totalKeystrokes') || 0;
+};
+
+const getTodayKeystrokes = (): number => {
   // Use cached value if available, fallback to store only if needed
   if (keystrokeTracker) {
     return keystrokeTracker.cachedStats.today;
@@ -1316,14 +1326,14 @@ const createTray = () => {
       trayIcon = nativeImage.createEmpty();
       trayIcon.resize({ width: 16, height: 16 });
     } else {
-      trayIcon = createDynamicTrayIcon(store.get('totalKeystrokes') || 0);
+      trayIcon = createDynamicTrayIcon(getTotalKeystrokes());
     }
   }
 
   tray = new Tray(trayIcon);
   updateTrayDisplay();
 
-  const totalCount = store.get('totalKeystrokes') ?? 0;
+  const totalCount = getTotalKeystrokes();
   const hasTypedBefore = store.get('hasTypedFirstKeystroke') || false;
   const isNewUser = totalCount === 0 && !hasTypedBefore;
 
@@ -1341,7 +1351,7 @@ const createTray = () => {
 
   const statsMenu = [
     {
-      label: `Total: ${store.get('totalKeystrokes').toLocaleString()} keystrokes`,
+      label: `Total: ${getTotalKeystrokes().toLocaleString()} keystrokes`,
       enabled: false
     },
     {
@@ -1579,7 +1589,7 @@ const createWindow = () => {
   // Send initial data to renderer
   mainWindow.webContents.on('did-finish-load', () => {
     mainWindow?.webContents.send('initial-data', {
-      total: store.get('totalKeystrokes'),
+      total: getTotalKeystrokes(),
       today: getTodayKeystrokes(),
       dailyData: store.get('dailyKeystrokes'),
       hourlyData: store.get('hourlyKeystrokes'),
@@ -1593,7 +1603,7 @@ const createWindow = () => {
 // IPC handler for request-data
 ipcMain.on('request-data', (event) => {
   event.reply('initial-data', {
-    total: store.get('totalKeystrokes'),
+    total: getTotalKeystrokes(),
     today: getTodayKeystrokes(),
     dailyData: store.get('dailyKeystrokes'),
     hourlyData: store.get('hourlyKeystrokes'),
@@ -1632,7 +1642,7 @@ ipcMain.on('create-goal', (event, goalData) => {
 
   // Send updated data back to renderer
   event.reply('initial-data', {
-    total: store.get('totalKeystrokes'),
+    total: getTotalKeystrokes(),
     today: getTodayKeystrokes(),
     dailyData: store.get('dailyKeystrokes'),
     hourlyData: store.get('hourlyKeystrokes'),
@@ -1684,7 +1694,7 @@ ipcMain.on('update-user-data', (event, data) => {
 
     // Broadcast update to all windows
     const updatePayload = {
-      total: store.get('totalKeystrokes'),
+      total: getTotalKeystrokes(),
       today: getTodayKeystrokes(),
       dailyData: store.get('dailyKeystrokes'),
       hourlyData: store.get('hourlyKeystrokes'),
@@ -1742,7 +1752,7 @@ const recalculateUserXP = () => {
 // IPC handlers for widget communication
 ipcMain.on('widget-request-data', (event) => {
   const widgetData = {
-    total: store.get('totalKeystrokes') || 0,
+    total: getTotalKeystrokes(),
     today: getTodayKeystrokes()
   };
   console.log(`📱 Widget requested data - Total: ${widgetData.total}, Today: ${widgetData.today}`);
