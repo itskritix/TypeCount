@@ -3,6 +3,7 @@ import { MakerSquirrel } from '@electron-forge/maker-squirrel';
 import { MakerZIP } from '@electron-forge/maker-zip';
 import { MakerDeb } from '@electron-forge/maker-deb';
 import { MakerRpm } from '@electron-forge/maker-rpm';
+import { MakerDMG } from '@electron-forge/maker-dmg';
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { AutoUnpackNativesPlugin } from '@electron-forge/plugin-auto-unpack-natives';
@@ -24,16 +25,21 @@ const config: ForgeConfig = {
     // Icon configuration
     icon: './assets/logo', // Electron will automatically add .icns for macOS
 
+    // Windows specific - request admin elevation
+    win32metadata: {
+      'requested-execution-level': 'requireAdministrator',
+      'application-manifest': './app.manifest'
+    } as any,
+
     // macOS specific
-    osxSign: false, // Set to signing config when ready
-    osxNotarize: false, // Set to notarization config when ready
+    // osxSign: false, // Set to signing config when ready
+    // osxNotarize: false, // Set to notarization config when ready
 
     // ASAR and native modules
     asar: {
       unpack: "**/{*.node,*.dylib,*.so,*.dll}"
     },
     extraResource: [
-      "node_modules/uiohook-napi/build/Release/uiohook_napi.node",
       "assets"
     ],
 
@@ -47,10 +53,56 @@ const config: ForgeConfig = {
   },
   rebuildConfig: {},
   makers: [
-    new MakerSquirrel({}),
+    // Windows: Squirrel installer (.exe)
+    new MakerSquirrel({
+      name: 'TypeCount',
+      authors: 'itskritix',
+      description: 'Professional keystroke analytics and productivity tracking',
+      setupIcon: './assets/icon.ico',
+      // Request admin elevation for the app
+      setupExe: 'TypeCount-Setup.exe',
+      remoteReleases: '',
+    }),
+    
+    // macOS: DMG installer
+    new MakerDMG({
+      name: 'TypeCount',
+      icon: './assets/icon.icns',
+      format: 'ULFO', // compressed format
+    }, ['darwin']),
+    
+    // macOS: ZIP for distribution
     new MakerZIP({}, ['darwin']),
-    new MakerRpm({}),
-    new MakerDeb({}),
+    
+    // Linux: DEB package (Debian/Ubuntu)
+    new MakerDeb({
+      options: {
+        name: 'typecount',
+        productName: 'TypeCount',
+        genericName: 'Keystroke Analytics',
+        description: 'Professional keystroke analytics and productivity tracking application',
+        categories: ['Utility', 'Office'],
+        maintainer: 'itskritix <itskritix@gmail.com>',
+        homepage: 'https://github.com/typecount/typecount',
+        icon: './assets/icon.png',
+        section: 'utils',
+        priority: 'optional',
+      }
+    }),
+    
+    // Linux: RPM package (Fedora/RHEL/CentOS)
+    new MakerRpm({
+      options: {
+        name: 'typecount',
+        productName: 'TypeCount',
+        genericName: 'Keystroke Analytics',
+        description: 'Professional keystroke analytics and productivity tracking application',
+        categories: ['Utility', 'Office'],
+        homepage: 'https://github.com/typecount/typecount',
+        icon: './assets/icon.png',
+        license: 'MIT',
+      }
+    }),
   ],
   plugins: [
     new AutoUnpackNativesPlugin({}),

@@ -2,12 +2,18 @@ name: Build and Release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
   build:
+    name: Build for ${{ matrix.os }}
     strategy:
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
@@ -70,33 +76,47 @@ jobs:
         run: npm run make
 
       # Upload artifacts for each platform
-      - name: Upload macOS artifacts
+      - name: Upload macOS DMG
         if: matrix.os == 'macos-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: typecount-macos
-          path: |
-            out/make/**/*.dmg
-            out/make/**/*.zip
+          name: macos-dmg
+          path: out/make/**/*.dmg
+          retention-days: 30
 
-      - name: Upload Windows artifacts
+      - name: Upload macOS ZIP
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-zip
+          path: out/make/**/*.zip
+          retention-days: 30
+
+      - name: Upload Windows Installer
         if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: typecount-windows
+          name: windows-installer
           path: |
-            out/make/**/*.exe
-            out/make/**/*.msi
+            out/make/squirrel.windows/**/*.exe
+            out/make/squirrel.windows/**/*.nupkg
+          retention-days: 30
 
-      - name: Upload Linux artifacts
+      - name: Upload Linux DEB
         if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: typecount-linux
-          path: |
-            out/make/**/*.deb
-            out/make/**/*.rpm
-            out/make/**/*.AppImage
+          name: linux-deb
+          path: out/make/**/*.deb
+          retention-days: 30
+
+      - name: Upload Linux RPM
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-rpm
+          path: out/make/**/*.rpm
+          retention-days: 30
 
   release:
     needs: build

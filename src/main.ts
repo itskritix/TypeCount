@@ -1217,6 +1217,38 @@ const requestAccessibilityPermissions = async () => {
         app.quit();
       }
     }
+  } else if (process.platform === 'win32') {
+    // On Windows, check if running as administrator
+    const { exec } = require('child_process');
+    const util = require('util');
+    const execPromise = util.promisify(exec);
+    
+    try {
+      const { stdout } = await execPromise('net session 2>&1');
+      // If this succeeds, we have admin rights
+      console.log('✓ Running with administrator privileges');
+    } catch (error) {
+      // Not running as admin
+      const result = await dialog.showMessageBox({
+        type: 'warning',
+        title: 'Administrator Access Required',
+        message: 'TypeCount needs administrator privileges to track keystrokes on Windows.',
+        detail: 'Please right-click on TypeCount and select "Run as administrator".\n\nAlternatively, you can set the app to always run as administrator:\n1. Right-click TypeCount shortcut\n2. Properties → Compatibility tab\n3. Check "Run this program as an administrator"\n4. Click OK',
+        buttons: ['Restart as Admin', 'Continue Anyway', 'Quit'],
+        defaultId: 0,
+        cancelId: 2
+      });
+
+      if (result.response === 0) {
+        // Try to restart as admin
+        const { shell } = require('electron');
+        shell.openExternal(`runas /user:Administrator "${process.execPath}"`);
+        app.quit();
+      } else if (result.response === 2) {
+        app.quit();
+      }
+      // If "Continue Anyway" (response 1), just continue but tracking won't work
+    }
   }
 };
 
