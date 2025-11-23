@@ -1588,8 +1588,13 @@ const createWindow = () => {
 
 // IPC handler for request-data
 ipcMain.on('request-data', (event) => {
+  // Use cached stats from tracker if available (most up-to-date), otherwise store
+  const totalKeystrokes = keystrokeTracker 
+    ? keystrokeTracker.cachedStats.total 
+    : store.get('totalKeystrokes');
+    
   event.reply('initial-data', {
-    total: store.get('totalKeystrokes'),
+    total: totalKeystrokes,
     today: getTodayKeystrokes(),
     dailyData: store.get('dailyKeystrokes'),
     hourlyData: store.get('hourlyKeystrokes'),
