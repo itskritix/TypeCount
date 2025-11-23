@@ -28,6 +28,7 @@ interface CloudUserData {
   streak_days: number;
   longest_streak: number;
   first_used_date: string;
+  last_active_date?: string;
   last_updated: string;
   device_name?: string;
 }
@@ -166,6 +167,7 @@ class CloudSyncService {
         streak_days: localData.streakDays || 0,
         longest_streak: localData.longestStreak || 0,
         first_used_date: localData.firstUsedDate || new Date().toISOString(),
+        last_active_date: localData.lastActiveDate,
         last_updated: new Date().toISOString(),
         device_name: await this.getDeviceName()
       };
@@ -301,11 +303,47 @@ class CloudSyncService {
             )).toISOString()
           : deviceData.first_used_date;
       }
+      
+      // Merge last active date (use most recent)
+      if (deviceData.last_active_date) {
+        const currentLastActive = mergedData.lastActiveDate;
+        if (!currentLastActive || new Date(deviceData.last_active_date) > new Date(currentLastActive)) {
+          mergedData.lastActiveDate = deviceData.last_active_date;
+          // If we adopt a newer last active date, we should probably trust that device's streak count
+          // unless our local streak is somehow better and valid.
+          // Simplest safe approach: Take max streak if dates match or are close?
+          // Actually, simply taking max streak_days is usually safe enough provided lastActiveDate is also updated.
+          mergedData.streakDays = Math.max(mergedData.streakDays || 0, deviceData.streak_days || 0);
+        }
+      }
     }
 
     // Recalculate total based on merged data
     mergedData.totalKeystrokes = Object.values(mergedData.dailyKeystrokes || {})
       .reduce((sum: number, count: any) => sum + (count || 0), 0);
+
+    // --- Recalculate XP and Level ---
+    // This ensures XP is consistent with stats while preserving extra XP from challenges
+    
+    // 1. Calculate base XP from merged stats (1 XP per 100 keys, 250 XP per achievement)
+    const keystrokeXP = Math.floor(mergedData.totalKeystrokes / 100);
+    const achievementXP = (mergedData.achievements || []).length * 250;
+    const calculatedBaseXP = keystrokeXP + achievementXP;
+
+    // 2. Find maximum XP reported by any device (including local)
+    let maxReportedXP = localData.userXP || 0;
+    for (const deviceData of cloudDataArray) {
+      maxReportedXP = Math.max(maxReportedXP, deviceData.user_xp || 0);
+    }
+
+    // 3. Use the higher value.
+    // This fixes "0 XP" bugs (calculatedBaseXP will be > 0)
+    // And preserves Challenge XP (maxReportedXP will be > calculatedBaseXP)
+    mergedData.userXP = Math.max(calculatedBaseXP, maxReportedXP);
+
+    // 4. Update Level based on new XP
+    // Level = sqrt(XP / 1000) + 1
+    mergedData.userLevel = Math.min(Math.floor(Math.sqrt(mergedData.userXP / 1000)) + 1, 100);
 
     return mergedData;
   }

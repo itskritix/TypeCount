@@ -14,8 +14,10 @@ declare global {
       onInitialData: (callback: (data: any) => void) => void;
       onAchievementUnlocked: (callback: (achievement: Achievement) => void) => void;
       onChallengeCompleted: (callback: (challenge: any) => void) => void;
+      onLevelUp: (callback: (data: { level: number; xp: number }) => void) => void;
       requestData: () => void;
       createGoal: (goalData: any) => void;
+      updateUserData: (data: any) => void;
       resetAllData?: () => void;
     };
   }
@@ -818,7 +820,9 @@ async function backupData() {
       userXP,
       personalityType,
       streakDays,
-      firstUsedDate
+      longestStreak,
+      firstUsedDate,
+      lastActiveDate: new Date().toISOString().split('T')[0] // Send current date as last active if backing up now
     };
 
     const result = await cloudSync.backupData(localData);
@@ -860,7 +864,9 @@ async function manualSync() {
       userXP,
       personalityType,
       streakDays,
-      firstUsedDate
+      longestStreak,
+      firstUsedDate,
+      lastActiveDate: new Date().toISOString().split('T')[0]
     };
 
     const result = await cloudSync.syncData(localData);
@@ -876,6 +882,9 @@ async function manualSync() {
       personalityType = result.mergedData.personalityType || personalityType;
       streakDays = result.mergedData.streakDays || streakDays;
       firstUsedDate = result.mergedData.firstUsedDate || firstUsedDate;
+
+      // Persist synced data to main process
+      window.electronAPI.updateUserData(result.mergedData);
 
       // Update UI
       updateUI();
@@ -1006,7 +1015,28 @@ async function confirmRestore() {
       userXP = deviceData.user_xp || 0;
       personalityType = deviceData.personality_type || '';
       streakDays = deviceData.streak_days || 0;
+      longestStreak = deviceData.longest_streak || 0;
       firstUsedDate = deviceData.first_used_date || new Date().toISOString();
+      const lastActiveDate = deviceData.last_active_date || new Date().toISOString().split('T')[0];
+      challenges = deviceData.challenges || [];
+      goals = deviceData.goals || [];
+
+      // Persist to main process
+      window.electronAPI.updateUserData({
+        totalKeystrokes,
+        dailyKeystrokes: dailyData,
+        hourlyKeystrokes: hourlyData,
+        achievements,
+        userLevel,
+        userXP,
+        personalityType,
+        streakDays,
+        longestStreak,
+        firstUsedDate,
+        lastActiveDate,
+        challenges,
+        goals
+      });
 
       // Update UI
       updateUI();
@@ -1392,6 +1422,13 @@ window.electronAPI.onChallengeCompleted((challenge) => {
 
   // Update UI to reflect completion
   // No specific view updates needed since challenges view was removed
+});
+
+window.electronAPI.onLevelUp((data) => {
+  userLevel = data.level;
+  userXP = data.xp;
+  updateUI();
+  showCelebration('levelup', `Level Up!`, `You reached Level ${data.level}!`);
 });
 
 // Request initial data on load

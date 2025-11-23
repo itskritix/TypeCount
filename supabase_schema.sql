@@ -22,6 +22,7 @@ create table if not exists public.user_typing_data (
   
   -- Meta
   first_used_date timestamptz,
+  last_active_date date,
   last_updated timestamptz default now(),
   created_at timestamptz default now(),
 

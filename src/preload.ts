@@ -24,6 +24,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createGoal: (goalData: any) => {
     ipcRenderer.send('create-goal', goalData);
   },
+  updateUserData: (data: any) => {
+    ipcRenderer.send('update-user-data', data);
+  },
+  onLevelUp: (callback: (data: any) => void) => {
+    ipcRenderer.on('level-up', (_event, data) => callback(data));
+  },
   sendManualKeystroke: () => {
     ipcRenderer.send('manual-keystroke');
   }

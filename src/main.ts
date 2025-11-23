@@ -373,6 +373,10 @@ class KeystrokeTracker {
       this.batchedUpdates = 0;
       this.cachedStats.lastUpdate = Date.now();
 
+      // Check and update streak
+      updateStreak();
+      this.cachedStats.streak = store.get('streakDays') || 0;
+
       // FIXED: Clean up timer safely
       this.clearBatchTimer();
     } catch (error) {
@@ -1643,6 +1647,88 @@ ipcMain.on('create-goal', (event, goalData) => {
   });
 });
 
+// IPC handler for updating user data (e.g., from cloud sync)
+ipcMain.on('update-user-data', (event, data) => {
+  try {
+    if (data.totalKeystrokes !== undefined) store.set('totalKeystrokes', data.totalKeystrokes);
+    if (data.dailyKeystrokes !== undefined) store.set('dailyKeystrokes', data.dailyKeystrokes);
+    if (data.hourlyKeystrokes !== undefined) store.set('hourlyKeystrokes', data.hourlyKeystrokes);
+    if (data.achievements !== undefined) store.set('achievements', data.achievements);
+    if (data.challenges !== undefined) store.set('challenges', data.challenges);
+    if (data.goals !== undefined) store.set('goals', data.goals);
+    if (data.userLevel !== undefined) store.set('userLevel', data.userLevel);
+    if (data.userXP !== undefined) store.set('userXP', data.userXP);
+    if (data.personalityType !== undefined) store.set('personalityType', data.personalityType);
+    if (data.streakDays !== undefined) store.set('streakDays', data.streakDays);
+    if (data.longestStreak !== undefined) store.set('longestStreak', data.longestStreak);
+    if (data.firstUsedDate !== undefined) store.set('firstUsedDate', data.firstUsedDate);
+    if (data.lastActiveDate !== undefined) store.set('lastActiveDate', data.lastActiveDate);
+    
+    // Refresh tracker cache if it exists
+    if (keystrokeTracker) {
+      keystrokeTracker.cachedStats.total = store.get('totalKeystrokes') || 0;
+      keystrokeTracker.cachedStats.streak = store.get('streakDays') || 0;
+      keystrokeTracker.cachedStats.userLevel = store.get('userLevel') || 1;
+      keystrokeTracker.cachedStats.userXP = store.get('userXP') || 0;
+    }
+
+    // Broadcast update to all windows
+    const updatePayload = {
+      total: store.get('totalKeystrokes'),
+      today: getTodayKeystrokes(),
+      dailyData: store.get('dailyKeystrokes'),
+      hourlyData: store.get('hourlyKeystrokes'),
+      achievements: store.get('achievements'),
+      challenges: store.get('challenges'),
+      goals: store.get('goals'),
+      userLevel: store.get('userLevel'),
+      userXP: store.get('userXP'),
+      streak: store.get('streakDays'),
+      longestStreak: store.get('longestStreak'),
+      firstUsedDate: store.get('firstUsedDate')
+    };
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('initial-data', updatePayload);
+    }
+  } catch (error) {
+    console.error('Failed to update user data from renderer:', error);
+  }
+});
+
+// Recalculate XP based on stats (Migration/Correction script)
+const recalculateUserXP = () => {
+  try {
+    const totalKeystrokes = store.get('totalKeystrokes') || 0;
+    const achievements = store.get('achievements') || [];
+    const currentXP = store.get('userXP') || 0;
+    
+    // 1. XP from Keystrokes (1 XP per 100 keys)
+    const keystrokeXP = Math.floor(totalKeystrokes / 100);
+    
+    // 2. XP from Achievements (250 XP per achievement)
+    const achievementXP = achievements.length * 250;
+    
+    // 3. XP from Challenges (need to check completed challenges)
+    // Since we don't track past challenge XP explicitly in a separate log,
+    // we might rely on the store's currentXP if it's higher, 
+    // OR we can trust the recalculation if we want to reset to a "pure" state.
+    // To be safe and fix "0 XP" issues without losing challenge progress:
+    // We'll take the MAX of (Calculated Basic XP) and (Current Stored XP).
+    // BUT if Current XP is 0 (the bug), we definitely want the Calculated Basic XP.
+    
+    const calculatedBasicXP = keystrokeXP + achievementXP;
+    
+    if (currentXP < calculatedBasicXP) {
+      console.log(` Fixing XP: Updated from ${currentXP} to ${calculatedBasicXP}`);
+      store.set('userXP', calculatedBasicXP);
+      store.set('userLevel', calculateLevel(calculatedBasicXP));
+    }
+  } catch (error) {
+    console.error('Error recalculating XP:', error);
+  }
+};
+
 // IPC handlers for widget communication
 ipcMain.on('widget-request-data', (event) => {
   event.reply('widget-update', {
@@ -1663,6 +1749,8 @@ app.whenReady().then(async () => {
 
   createTray();
   startKeystrokeTracking();
+  updateStreak();
+  recalculateUserXP();
 
   const autoLaunchEnabled = store.get('autoLaunchEnabled');
   try {
