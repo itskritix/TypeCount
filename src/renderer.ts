@@ -583,7 +583,7 @@ function renderChallengesView(): string {
 
       ${completedChallenges.length > 0 ? `
         <div class="challenge-section">
-          <h4>✅ Recent Completions</h4>
+          <h4> Recent Completions</h4>
           <div class="challenges-grid">
             ${completedChallenges.slice(-6).map(challenge => `
               <div class="challenge-card completed">
@@ -865,7 +865,7 @@ function renderSettingsView(): string {
           <div class="sync-status-indicator ${isSignedIn ? 'connected' : 'disconnected'}">
             <span class="status-dot"></span>
             <span class="status-text">
-              ${isSignedIn ? `✅ Connected as ${currentUser?.email || 'User'}` : '⚪ Not connected'}
+              ${isSignedIn ? ` Connected as ${currentUser?.email || 'User'}` : '⚪ Not connected'}
             </span>
           </div>
         </div>
@@ -1071,7 +1071,7 @@ async function handleAuth(event: Event) {
       isSignedIn = true;
       cloudSyncEnabled = true;
 
-      showNotification(`✅ Successfully ${mode === 'signin' ? 'signed in' : 'created account'}!`);
+      showNotification(` Successfully ${mode === 'signin' ? 'signed in' : 'created account'}!`);
 
       // Refresh settings view
       if (currentView === 'settings') {
@@ -1083,7 +1083,7 @@ async function handleAuth(event: Event) {
     }
   } catch (error: any) {
     console.error('Authentication error:', error);
-    showNotification(`❌ ${error.message || 'Authentication failed'}`);
+    showNotification(` ${error.message || 'Authentication failed'}`);
   } finally {
     // Reset loading state
     if (btnText && btnLoading) {
@@ -1100,7 +1100,7 @@ async function signOut() {
     isSignedIn = false;
     cloudSyncEnabled = false;
 
-    showNotification('✅ Signed out successfully');
+    showNotification(' Signed out successfully');
 
     // Refresh settings view
     if (currentView === 'settings') {
@@ -1108,14 +1108,14 @@ async function signOut() {
     }
   } catch (error: any) {
     console.error('Sign out error:', error);
-    showNotification('❌ Failed to sign out');
+    showNotification(' Failed to sign out');
   }
 }
 
 // Cloud backup and sync functions
 async function backupData() {
   if (!cloudSync.isEnabled() || !cloudSync.isAuthenticated()) {
-    showNotification('❌ Cloud sync not available');
+    showNotification(' Cloud sync not available');
     return;
   }
 
@@ -1139,7 +1139,7 @@ async function backupData() {
     const result = await cloudSync.backupData(localData);
 
     if (result.success) {
-      showNotification('✅ Data backed up successfully!');
+      showNotification(' Data backed up successfully!');
 
       // Update last sync time in UI
       cloudSyncConfig.lastSync = new Date().toISOString();
@@ -1151,13 +1151,13 @@ async function backupData() {
     }
   } catch (error: any) {
     console.error('Backup error:', error);
-    showNotification(`❌ Backup failed: ${error.message}`);
+    showNotification(` Backup failed: ${error.message}`);
   }
 }
 
 async function manualSync() {
   if (!cloudSync.isEnabled() || !cloudSync.isAuthenticated()) {
-    showNotification('❌ Cloud sync not available');
+    showNotification(' Cloud sync not available');
     return;
   }
 
@@ -1195,7 +1195,7 @@ async function manualSync() {
       // Update UI
       updateUI();
 
-      showNotification('✅ Data synced successfully!');
+      showNotification(' Data synced successfully!');
 
       // Update last sync time in UI
       cloudSyncConfig.lastSync = new Date().toISOString();
@@ -1207,13 +1207,13 @@ async function manualSync() {
     }
   } catch (error: any) {
     console.error('Sync error:', error);
-    showNotification(`❌ Sync failed: ${error.message}`);
+    showNotification(` Sync failed: ${error.message}`);
   }
 }
 
 async function restoreFromCloud() {
   if (!cloudSync.isEnabled() || !cloudSync.isAuthenticated()) {
-    showNotification('❌ Cloud sync not available');
+    showNotification(' Cloud sync not available');
     return;
   }
 
@@ -1237,7 +1237,7 @@ async function restoreFromCloud() {
     }
   } catch (error: any) {
     console.error('Restore error:', error);
-    showNotification(`❌ Restore failed: ${error.message}`);
+    showNotification(` Restore failed: ${error.message}`);
   }
 }
 
@@ -1327,11 +1327,11 @@ async function confirmRestore() {
       updateUI();
 
       hideRestoreModal();
-      showNotification('✅ Data restored successfully!');
+      showNotification(' Data restored successfully!');
     }
   } catch (error: any) {
     console.error('Restore error:', error);
-    showNotification(`❌ Restore failed: ${error.message}`);
+    showNotification(` Restore failed: ${error.message}`);
   }
 }
 
@@ -1343,7 +1343,7 @@ function toggleCloudSync(enabled: boolean) {
     manualSync();
   }
 
-  showNotification(enabled ? '✅ Cloud sync enabled' : '⚪ Cloud sync disabled');
+  showNotification(enabled ? ' Cloud sync enabled' : '⚪ Cloud sync disabled');
 }
 
 function updateSyncInterval(hours: string) {
@@ -1391,17 +1391,17 @@ async function confirmResetData() {
     updateUI();
 
     hideResetDataModal();
-    showNotification('✅ All data has been reset');
+    showNotification(' All data has been reset');
   } catch (error: any) {
     console.error('Reset error:', error);
-    showNotification('❌ Failed to reset data');
+    showNotification(' Failed to reset data');
   }
 }
 
 function toggleAnalytics(enabled: boolean) {
   // Store analytics preference
   localStorage.setItem('typecount-analytics-enabled', enabled.toString());
-  showNotification(enabled ? '✅ Analytics sharing enabled' : '⚪ Analytics sharing disabled');
+  showNotification(enabled ? ' Analytics sharing enabled' : '⚪ Analytics sharing disabled');
 }
 
 // Initialize cloud sync on app start

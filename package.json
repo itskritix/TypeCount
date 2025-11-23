@@ -1,8 +1,8 @@
 {
   "name": "typecount",
-  "productName": "typecount",
+  "productName": "TypeCount",
   "version": "1.0.0",
-  "description": "My Electron application description",
+  "description": "Professional keystroke analytics and productivity tracking application. Monitor your typing patterns, unlock achievements, and optimize your productivity with real-time analytics and gamification.",
   "main": ".vite/build/main.js",
   "scripts": {
     "start": "electron-forge start",
@@ -14,10 +14,28 @@
     "rebuild:uiohook": "npx @electron/rebuild --version=39.2.3 --arch=arm64 --module-dir node_modules/uiohook-napi",
     "postinstall": "npx @electron/rebuild --version=39.2.3 --arch=arm64"
   },
-  "keywords": [],
+  "keywords": [
+    "productivity",
+    "typing",
+    "analytics",
+    "keystroke",
+    "monitoring",
+    "gamification",
+    "macOS",
+    "electron",
+    "desktop-app"
+  ],
   "author": {
     "name": "itskritix",
     "email": "itskritix@gmail.com"
+  },
+  "homepage": "https://github.com/typecount/typecount",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/typecount/typecount.git"
+  },
+  "bugs": {
+    "url": "https://github.com/typecount/typecount/issues"
   },
   "license": "MIT",
   "devDependencies": {

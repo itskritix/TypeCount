@@ -1,11 +1,22 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, dialog, systemPreferences, ipcMain } from 'electron';
-import path from 'node:path';
-import fs from 'node:fs';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, systemPreferences, Tray } from 'electron';
 import started from 'electron-squirrel-startup';
 import Store from 'electron-store';
+import fs from 'node:fs';
+import path from 'node:path';
 
 // Import proper types for type safety
+import AutoLaunch from 'auto-launch';
+import { autoUpdater } from 'electron-updater';
 import type { UiohookKeyboardEvent, UiohookNapi } from 'uiohook-napi';
+import {
+  calculateLevel,
+  checkAchievements,
+  determinePersonalityType,
+  generateDailyChallenge,
+  generateWeeklyChallenge,
+  getDailyProgress,
+  updateGoalProgress
+} from './gamification';
 
 // Type-safe module loading with integrity checks
 interface UiohookModule {
@@ -26,7 +37,7 @@ function loadNativeModuleSecurely(): boolean {
 
       // Security Check 1: Verify file exists
       if (!fs.existsSync(nativeModulePath)) {
-        console.error('❌ Native module not found at expected location:', nativeModulePath);
+        console.error(' Native module not found at expected location:', nativeModulePath);
         return false;
       }
 
@@ -36,17 +47,17 @@ function loadNativeModuleSecurely(): boolean {
 
       // Reasonable size limits (uiohook_napi.node should be ~80-200KB)
       if (stats.size === 0 || fileSizeKB > 10000) {
-        console.error('❌ Native module file size suspicious:', fileSizeKB, 'KB');
+        console.error(' Native module file size suspicious:', fileSizeKB, 'KB');
         return false;
       }
 
       // Security Check 3: Verify file permissions
       if (!stats.isFile()) {
-        console.error('❌ Native module path is not a regular file');
+        console.error(' Native module path is not a regular file');
         return false;
       }
 
-      console.log('✅ Native module integrity verified:', fileSizeKB.toFixed(1), 'KB');
+      console.log(' Native module integrity verified:', fileSizeKB.toFixed(1), 'KB');
 
       // Load with controlled path
       const uiohookModule: UiohookModule = require(nativeModulePath);
@@ -57,36 +68,24 @@ function loadNativeModuleSecurely(): boolean {
       const uiohookModule: UiohookModule = require('uiohook-napi');
       uIOhook = uiohookModule.uIOhook;
       UiohookKey = uiohookModule.UiohookKey;
-      console.log('✅ Development mode: uiohook-napi loaded from node_modules');
+      console.log(' Development mode: uiohook-napi loaded from node_modules');
     }
 
     // Final validation
     if (!uIOhook || typeof uIOhook.start !== 'function') {
-      console.error('❌ Invalid uIOhook module structure');
+      console.error(' Invalid uIOhook module structure');
       return false;
     }
 
     return true;
   } catch (error) {
-    console.error('❌ Critical error loading uiohook-napi:', error);
+    console.error(' Critical error loading uiohook-napi:', error);
     return false;
   }
 }
 
 // Initialize native module with security checks
 isNativeModuleAvailable = loadNativeModuleSecurely();
-import AutoLaunch from 'auto-launch';
-import { autoUpdater } from 'electron-updater';
-import {
-  checkAchievements,
-  generateDailyChallenge,
-  generateWeeklyChallenge,
-  calculateLevel,
-  determinePersonalityType,
-  getDailyProgress,
-  getWeeklyProgress,
-  updateGoalProgress
-} from './gamification';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -260,7 +259,7 @@ class KeystrokeTracker {
 
     // Reset overload state if we're back to normal rates
     if (this.isOverloaded && now - this.lastEventTime > this.MIN_EVENT_INTERVAL * 2) {
-      console.log('✅ Circuit breaker deactivated, normal operation resumed');
+      console.log(' Circuit breaker deactivated, normal operation resumed');
       this.isOverloaded = false;
       this.eventCount = 0;
     }
@@ -316,7 +315,7 @@ class KeystrokeTracker {
         this.batchUpdateTimer = null;
       }
     } catch (error) {
-      console.error('❌ Error flushing batched updates:', error);
+      console.error(' Error flushing batched updates:', error);
     }
   }
 
@@ -390,7 +389,7 @@ class KeystrokeTracker {
             }
           }
         } catch (error) {
-          console.error('❌ Error checking achievements:', error);
+          console.error(' Error checking achievements:', error);
         }
       }, 0);
     }
@@ -415,7 +414,7 @@ let keystrokeTracker: KeystrokeTracker | null = null;
 const startKeystrokeTracking = () => {
   // Validation: Check if native module is available and secure
   if (!isNativeModuleAvailable || !uIOhook) {
-    console.error('❌ uIOhook not available - global keystroke monitoring disabled');
+    console.error(' uIOhook not available - global keystroke monitoring disabled');
     console.log('💡 Tip: Ensure accessibility permissions are granted and app is restarted');
     return;
   }
@@ -428,11 +427,11 @@ const startKeystrokeTracking = () => {
     uIOhook.on('keydown', keystrokeTracker['handleKeystroke']);
 
     uIOhook.start();
-    console.log('✅ Performance-optimized keystroke tracking started');
+    console.log(' Performance-optimized keystroke tracking started');
     console.log('📊 Rate limit: 500 events/sec, Batch size: 25, Update delay: 100ms');
     console.log('🏆 Supports up to 20x world record typing speed (25.4/sec)');
   } catch (error) {
-    console.error('❌ Failed to start global keystroke tracking:', error);
+    console.error(' Failed to start global keystroke tracking:', error);
 
     // Platform-specific error handling
     if (process.platform === 'darwin') {
@@ -453,10 +452,10 @@ const stopKeystrokeTracking = () => {
     // Stop the native module
     if (uIOhook) {
       uIOhook.stop();
-      console.log('✅ Global keystroke tracking stopped gracefully');
+      console.log(' Global keystroke tracking stopped gracefully');
     }
   } catch (error) {
-    console.error('❌ Error stopping keystroke tracking:', error);
+    console.error(' Error stopping keystroke tracking:', error);
   }
 };
 

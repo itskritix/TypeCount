@@ -10,11 +10,38 @@ import { FuseV1Options, FuseVersion } from '@electron/fuses';
 
 const config: ForgeConfig = {
   packagerConfig: {
+    name: 'TypeCount',
+    productName: 'TypeCount',
+    description: 'Professional keystroke analytics and productivity tracking',
+    version: '1.0.0',
+    copyright: '© 2024 TypeCount. All rights reserved.',
+    category: 'Productivity',
+
+    // App Bundle Configuration for macOS
+    appBundleId: 'com.typecount.app',
+    appCategoryType: 'public.app-category.productivity',
+
+    // Icon configuration
+    icon: './assets/logo', // Electron will automatically add .icns for macOS
+
+    // macOS specific
+    osxSign: false, // Set to signing config when ready
+    osxNotarize: false, // Set to notarization config when ready
+
+    // ASAR and native modules
     asar: {
       unpack: "**/{*.node,*.dylib,*.so,*.dll}"
     },
     extraResource: [
       "node_modules/uiohook-napi/build/Release/uiohook_napi.node"
+    ],
+
+    // Additional metadata
+    protocols: [
+      {
+        name: 'TypeCount',
+        schemes: ['typecount']
+      }
     ]
   },
   rebuildConfig: {},
