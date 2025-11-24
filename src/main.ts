@@ -30,16 +30,11 @@ let isNativeModuleAvailable = false;
 function loadNativeModuleSecurely(): boolean {
   try {
     if (app.isPackaged) {
-      // In production, we copied uiohook-napi to resources/node_modules/uiohook-napi
-      // We point to the module directory, and require() will find package.json -> main
       const nativeModulePath = path.join(process.resourcesPath, 'node_modules', 'uiohook-napi');
       
       console.log('Checking for uiohook-napi at:', nativeModulePath);
 
       if (fs.existsSync(nativeModulePath)) {
-        // We use require() on the directory. Node will find package.json, then load dist/index.js.
-        // dist/index.js will require('node-gyp-build').
-        // Since node-gyp-build is in resources/node_modules/node-gyp-build, it should be found.
         const uiohookModule: UiohookModule = require(nativeModulePath);
         uIOhook = uiohookModule.uIOhook;
         UiohookKey = uiohookModule.UiohookKey;
@@ -1242,7 +1237,6 @@ const requestAccessibilityPermissions = async () => {
       } else if (result.response === 2) {
         app.quit();
       }
-      // If "Continue Anyway" (response 1), just continue but tracking won't work
     }
   }
 };
@@ -1525,7 +1519,7 @@ const createWindow = () => {
     minWidth: 800,
     minHeight: 600,
     backgroundColor: '#09090b', // Matches new dark theme
-    titleBarStyle: 'hidden', // Hides native title bar but keeps window controls overlay on Mac
+    titleBarStyle: 'hidden', 
     titleBarOverlay: {
       color: '#09090b',
       symbolColor: '#fafafa',
@@ -1745,13 +1739,6 @@ const recalculateUserXP = () => {
     // 2. XP from Achievements (250 XP per achievement)
     const achievementXP = achievements.length * 250;
     
-    // 3. XP from Challenges (need to check completed challenges)
-    // Since we don't track past challenge XP explicitly in a separate log,
-    // we might rely on the store's currentXP if it's higher, 
-    // OR we can trust the recalculation if we want to reset to a "pure" state.
-    // To be safe and fix "0 XP" issues without losing challenge progress:
-    // We'll take the MAX of (Calculated Basic XP) and (Current Stored XP).
-    // BUT if Current XP is 0 (the bug), we definitely want the Calculated Basic XP.
     
     const calculatedBasicXP = keystrokeXP + achievementXP;
     

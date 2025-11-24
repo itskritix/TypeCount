@@ -17,7 +17,7 @@ const config: ForgeConfig = {
     productName: 'TypeCount',
     description: 'Professional keystroke analytics and productivity tracking',
     version: '1.0.0',
-    copyright: '© 2024 TypeCount. All rights reserved.',
+    copyright: '© 2025 TypeCount. All rights reserved.',
     category: 'Productivity',
 
     // App Bundle Configuration for macOS
