@@ -390,6 +390,32 @@ function createDashboard() {
 
 
       <div id="notification" class="notification"></div>
+
+      <!-- Reset Data Modal -->
+      <div id="resetDataModal" class="modal hidden">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h4>⚠️ Reset All Data</h4>
+            <button class="close-btn" onclick="hideResetDataModal()">&times;</button>
+          </div>
+          <div class="modal-body">
+            <p style="color: #ef4444; font-weight: bold;">Warning: This action cannot be undone!</p>
+            <p>This will permanently delete:</p>
+            <ul style="margin: 1rem 0; padding-left: 1.5rem;">
+              <li>All keystroke data</li>
+              <li>All achievements</li>
+              <li>All challenges and goals</li>
+              <li>Your level and XP</li>
+              <li>All statistics and history</li>
+            </ul>
+            <p>Are you sure you want to reset everything?</p>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="cancel-btn" onclick="hideResetDataModal()">Cancel</button>
+            <button type="button" class="cyber-button danger" onclick="confirmResetData()">Reset All Data</button>
+          </div>
+        </div>
+      </div>
     </div>
   `;
 
