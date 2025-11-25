@@ -16,10 +16,10 @@
     "generate:installer-gif": "node scripts/generate-installer-gif.js",
     "generate:installer-assets": "node scripts/generate-installer-assets.js",
     "build": "electron-forge package",
-    "dist": "npm run build && electron-builder",
-    "dist:win": "npm run build && electron-builder --win",
-    "dist:mac": "npm run build && electron-builder --mac",
-    "dist:linux": "npm run build && electron-builder --linux"
+    "dist": "npm run build && electron-builder --publish never",
+    "dist:win": "npm run build && electron-builder --win --publish never",
+    "dist:mac": "npm run build && electron-builder --mac --publish never",
+    "dist:linux": "npm run build && electron-builder --linux --publish never"
   },
   "keywords": [
     "productivity",
@@ -39,7 +39,7 @@
   "homepage": "https://everyrank.app",
   "repository": {
     "type": "git",
-    "url": "https://github.com/typecount/typecount.git"
+    "url": "https://github.com/itskritix/TypeCount.git"
   },
   "bugs": {
     "url": "https://github.com/typecount/typecount/issues"
