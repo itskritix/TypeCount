@@ -61,13 +61,8 @@ jobs:
       # Build and package with Electron Forge
       - name: Build application
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Environment variables from GitHub Secrets (add your own):
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-          ANALYTICS_ID: ${{ secrets.ANALYTICS_ID }}
-          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: npm run make
 
       # Upload artifacts for each platform

@@ -19,6 +19,7 @@ const hasInstallerGif = fs.existsSync(path.resolve(__dirname, installerGifPath))
 const config: ForgeConfig = {
   packagerConfig: {
     name: 'TypeCount',
+    executableName: 'typecount', // Linux needs lowercase executable name
     productName: 'TypeCount',
     description: 'Professional keystroke analytics and productivity tracking',
     version: '1.0.0',
