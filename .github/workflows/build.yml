@@ -54,6 +54,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libx11-dev libxtst-dev libxkbcommon-dev libxkbcommon-x11-dev
 
+      # Build the Vite application first
+      - name: Build application with Forge
+        run: npm run package
+
       # Build the application for each platform
       - name: Build Windows app
         if: matrix.os == 'windows-latest'
