@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>TypeCount Installer Animation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 420px;
+            height: 300px;
+            background: linear-gradient(135deg, #0a0a0f 0%, #111118 50%, #0a0a0f 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            overflow: hidden;
+        }
+
+        .container {
+            text-align: center;
+            position: relative;
+        }
+
+        /* Background effects */
+        .bg-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(50px);
+            animation: orbFloat 6s ease-in-out infinite;
+        }
+
+        .bg-orb-1 {
+            width: 150px;
+            height: 150px;
+            background: rgba(74, 74, 74, 0.4);
+            top: -80px;
+            left: -100px;
+        }
+
+        .bg-orb-2 {
+            width: 120px;
+            height: 120px;
+            background: rgba(144, 144, 144, 0.3);
+            bottom: -60px;
+            right: -80px;
+            animation-delay: -3s;
+        }
+
+        @keyframes orbFloat {
+            0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.5; }
+            50% { transform: translate(20px, -20px) scale(1.1); opacity: 0.8; }
+        }
+
+        /* Logo container */
+        .logo-wrapper {
+            width: 90px;
+            height: 90px;
+            margin: 0 auto 20px;
+            animation: logoFloat 3s ease-in-out infinite;
+            filter: drop-shadow(0 10px 30px rgba(144, 144, 144, 0.3));
+        }
+
+        .logo-wrapper svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        @keyframes logoFloat {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+
+        /* Title */
+        .title {
+            font-size: 28px;
+            font-weight: 700;
+            background: linear-gradient(180deg, #ffffff 0%, #a1a1aa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 13px;
+            color: #71717a;
+            margin-bottom: 32px;
+        }
+
+        /* Progress bar */
+        .progress-container {
+            width: 280px;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            margin: 0 auto 16px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #4a4a4a, #909090, #e0e0e0);
+            border-radius: 3px;
+            animation: progress 4s ease-in-out infinite;
+            position: relative;
+        }
+
+        .progress-bar::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(
+                90deg,
+                transparent,
+                rgba(255, 255, 255, 0.4),
+                transparent
+            );
+            animation: shimmer 1.5s infinite;
+        }
+
+        @keyframes progress {
+            0% { width: 0%; }
+            50% { width: 70%; }
+            80% { width: 90%; }
+            100% { width: 100%; }
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(200%); }
+        }
+
+        /* Status */
+        .status {
+            font-size: 12px;
+            color: #52525b;
+            animation: statusPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes statusPulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+
+        /* Particles */
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: #909090;
+            border-radius: 50%;
+            animation: particleFloat 3s ease-in-out infinite;
+        }
+
+        .particle:nth-child(1) { left: 10%; top: 20%; animation-delay: 0s; }
+        .particle:nth-child(2) { left: 85%; top: 30%; animation-delay: -0.5s; background: #e0e0e0; }
+        .particle:nth-child(3) { left: 20%; top: 70%; animation-delay: -1s; background: #4a4a4a; }
+        .particle:nth-child(4) { left: 75%; top: 80%; animation-delay: -1.5s; }
+        .particle:nth-child(5) { left: 50%; top: 15%; animation-delay: -2s; background: #e0e0e0; }
+
+        @keyframes particleFloat {
+            0%, 100% {
+                transform: translate(0, 0) scale(1);
+                opacity: 0.3;
+            }
+            50% {
+                transform: translate(10px, -15px) scale(1.5);
+                opacity: 0.8;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-orb bg-orb-1"></div>
+    <div class="bg-orb bg-orb-2"></div>
+
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+
+    <div class="container">
+        <!-- Actual TypeCount Logo SVG embedded -->
+        <div class="logo-wrapper">
+            <svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <linearGradient id="bg_grad" x1="512" y1="0" x2="512" y2="1024" gradientUnits="userSpaceOnUse">
+                        <stop offset="0" stop-color="#4a4a4a"/>
+                        <stop offset="1" stop-color="#2b2b2b"/>
+                    </linearGradient>
+                    <linearGradient id="glass_surface" x1="112" y1="112" x2="912" y2="912" gradientUnits="userSpaceOnUse">
+                        <stop offset="0" stop-color="white" stop-opacity="0.4"/>
+                        <stop offset="0.5" stop-color="white" stop-opacity="0.1"/>
+                        <stop offset="1" stop-color="white" stop-opacity="0.05"/>
+                    </linearGradient>
+                    <linearGradient id="glass_border" x1="112" y1="112" x2="912" y2="912" gradientUnits="userSpaceOnUse">
+                        <stop offset="0" stop-color="white" stop-opacity="0.8"/>
+                        <stop offset="1" stop-color="white" stop-opacity="0.1"/>
+                    </linearGradient>
+                    <linearGradient id="liquid_grad" x1="300" y1="300" x2="700" y2="700" gradientUnits="userSpaceOnUse">
+                        <stop offset="0" stop-color="#e0e0e0"/>
+                        <stop offset="1" stop-color="#909090"/>
+                    </linearGradient>
+                    <radialGradient id="liquid_highlight" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(450 400) rotate(45) scale(150)">
+                        <stop offset="0" stop-color="white" stop-opacity="0.95"/>
+                        <stop offset="1" stop-color="white" stop-opacity="0"/>
+                    </radialGradient>
+                    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+                        <feDropShadow dx="0" dy="20" stdDeviation="30" flood-color="black" flood-opacity="0.4"/>
+                    </filter>
+                    <filter id="blob_glow">
+                        <feGaussianBlur stdDeviation="5" in="SourceAlpha" result="blur"/>
+                        <feSpecularLighting in="blur" surfaceScale="5" specularConstant="1.2" specularExponent="30" lighting-color="white" result="specular">
+                            <fePointLight x="300" y="300" z="300"/>
+                        </feSpecularLighting>
+                        <feComposite in="specular" in2="SourceAlpha" operator="in" result="composite"/>
+                        <feMerge>
+                            <feMergeNode in="SourceGraphic"/>
+                            <feMergeNode in="composite"/>
+                        </feMerge>
+                    </filter>
+                </defs>
+                <rect x="112" y="112" width="800" height="800" rx="180" fill="url(#bg_grad)" filter="url(#shadow)"/>
+                <rect x="112" y="112" width="800" height="800" rx="180" fill="url(#glass_surface)"/>
+                <rect x="112" y="112" width="800" height="800" rx="180" stroke="url(#glass_border)" stroke-width="6"/>
+                <g filter="url(#blob_glow)">
+                    <path d="M512 280 C 680 240, 760 400, 740 512 C 720 650, 600 760, 512 740 C 400 720, 280 640, 300 512 C 320 380, 420 300, 512 280 Z" fill="url(#liquid_grad)"/>
+                    <ellipse cx="420" cy="420" rx="80" ry="50" transform="rotate(-30 420 420)" fill="url(#liquid_highlight)"/>
+                </g>
+                <path d="M112 112 L 912 912 L 912 112 Z" fill="white" fill-opacity="0.03" style="mix-blend-mode: overlay;"/>
+            </svg>
+        </div>
+
+        <h1 class="title">TypeCount</h1>
+        <p class="subtitle">Installing keystroke analytics...</p>
+
+        <div class="progress-container">
+            <div class="progress-bar"></div>
+        </div>
+
+        <p class="status">Please wait while we set things up</p>
+    </div>
+</body>
+</html>

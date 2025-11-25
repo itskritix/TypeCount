@@ -11,6 +11,10 @@ import { FuseV1Options, FuseVersion } from '@electron/fuses';
 import fs from 'fs-extra';
 import path from 'path';
 
+// Check if custom installer assets exist
+const installerGifPath = './assets/installer/installing.gif';
+const hasInstallerGif = fs.existsSync(path.resolve(__dirname, installerGifPath));
+
 const config: ForgeConfig = {
   packagerConfig: {
     name: 'TypeCount',
@@ -28,9 +32,11 @@ const config: ForgeConfig = {
     icon: './assets/logo', // Electron will automatically add .icns for macOS
 
     // Windows specific - request admin elevation
+    /* 
     win32metadata: {
       'requested-execution-level': 'requireAdministrator'
     } as any,
+    */
 
     // macOS specific
     // osxSign: false, // Set to signing config when ready
@@ -55,12 +61,20 @@ const config: ForgeConfig = {
     // Windows: Squirrel installer (.exe)
     new MakerSquirrel({
       name: 'TypeCount',
-      authors: 'itskritix',
+      authors: 'TypeCount',
       description: 'Professional keystroke analytics and productivity tracking',
       setupIcon: './assets/icon.ico',
-      // Request admin elevation for the app
       setupExe: 'TypeCount-Setup.exe',
-      remoteReleases: '',
+      // Custom installer branding
+      iconUrl: 'https://raw.githubusercontent.com/itskritix/TypeCount/main/assets/icon.ico',
+      // Loading animation during install (generate with HTML helper in assets/installer)
+      // To create: open installing-animation.html, screen record, save as installing.gif
+      ...(hasInstallerGif ? { loadingGif: installerGifPath } : {}),
+      // No MSI, just exe
+      noMsi: true,
+      // Signing can be added later for trusted installs
+      // certificateFile: './cert.pfx',
+      // certificatePassword: process.env.CERT_PASSWORD,
     }),
     
     // macOS: DMG installer
@@ -82,7 +96,7 @@ const config: ForgeConfig = {
         description: 'Professional keystroke analytics and productivity tracking application',
         categories: ['Utility', 'Office'],
         maintainer: 'itskritix <itskritix@gmail.com>',
-        homepage: 'https://github.com/typecount/typecount',
+        homepage: 'https://github.com/itskritix/typecount',
         icon: './assets/icon.png',
         section: 'utils',
         priority: 'optional',
@@ -97,7 +111,7 @@ const config: ForgeConfig = {
         genericName: 'Keystroke Analytics',
         description: 'Professional keystroke analytics and productivity tracking application',
         categories: ['Utility', 'Office'],
-        homepage: 'https://github.com/typecount/typecount',
+        homepage: 'https://github.com/itskritix/typecount',
         icon: './assets/icon.png',
         license: 'MIT',
       }
@@ -151,6 +165,11 @@ const config: ForgeConfig = {
         },
         {
           entry: 'src/preload.ts',
+          config: 'vite.preload.config.ts',
+          target: 'preload',
+        },
+        {
+          entry: 'src/onboarding-preload.ts',
           config: 'vite.preload.config.ts',
           target: 'preload',
         },

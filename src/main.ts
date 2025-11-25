@@ -15,6 +15,8 @@ import {
   getDailyProgress,
   updateGoalProgress
 } from './gamification';
+import { onboardingService } from './onboarding';
+import { createSplashScreen, closeSplashScreen, updateSplashStatus } from './splash';
 
 // Type-safe module loading with integrity checks
 interface UiohookModule {
@@ -1767,21 +1769,52 @@ ipcMain.on('widget-request-data', (event) => {
   });
 });
 
+// Register onboarding IPC handlers (encapsulated in service)
+onboardingService.registerIpcHandlers();
+
 // Hide app from dock/taskbar completely (like Raycast)
 app.dock?.hide();
 
 
 // App initialization
 app.whenReady().then(async () => {
+  // Show splash screen during startup
+  const isFirstLaunch = onboardingService.shouldShowOnboarding();
+
+  // Only show splash on subsequent launches (not first launch - onboarding handles that)
+  if (!isFirstLaunch) {
+    createSplashScreen();
+    updateSplashStatus('Initializing...');
+  }
+
+  // Check if onboarding should be shown for first-time users
+  if (isFirstLaunch) {
+    await onboardingService.startOnboarding();
+  }
+
+  if (!isFirstLaunch) {
+    updateSplashStatus('Setting up permissions...');
+  }
+
   if (process.platform === 'darwin') {
     requestAccessibilityPermissions();
   }
 
+  if (!isFirstLaunch) {
+    updateSplashStatus('Creating system tray...');
+  }
   createTray();
+
+  if (!isFirstLaunch) {
+    updateSplashStatus('Starting keystroke tracking...');
+  }
   startKeystrokeTracking();
   updateStreak();
   recalculateUserXP();
 
+  if (!isFirstLaunch) {
+    updateSplashStatus('Configuring auto-launch...');
+  }
   const autoLaunchEnabled = store.get('autoLaunchEnabled');
   try {
     const isEnabled = await autoLauncher.isEnabled();
@@ -1798,7 +1831,18 @@ app.whenReady().then(async () => {
     createWidget();
   }
 
+  if (!isFirstLaunch) {
+    updateSplashStatus('Checking for updates...');
+  }
   setupAutoUpdater();
+
+  // Close splash screen after everything is ready
+  if (!isFirstLaunch) {
+    updateSplashStatus('Ready!');
+    setTimeout(() => {
+      closeSplashScreen();
+    }, 800);
+  }
 });
 
 app.on('window-all-closed', (e: Event) => {
