@@ -752,13 +752,14 @@ export class OnboardingService {
 
         /* Main container */
         .container {
-            position: relative;
+            position: absolute;
             z-index: 1;
-            width: 100%;
-            max-width: 900px;
-            height: 100%;
-            max-height: 700px;
-            margin: 20px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 900px;
+            height: calc(100vh - 80px);
+            max-height: 900px;
             background: rgba(10, 10, 15, 0.8);
             backdrop-filter: blur(40px);
             border: 1px solid var(--border-subtle);
@@ -831,14 +832,16 @@ export class OnboardingService {
 
         /* Content area */
         .content {
-            flex: 1;
+            flex: 1 1 auto;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 20px 60px 40px;
+            padding: 30px 60px;
             text-align: center;
             transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+            overflow-y: auto;
+            overflow-x: hidden;
         }
 
         .content.transitioning {
@@ -1067,12 +1070,14 @@ export class OnboardingService {
 
         /* Footer */
         .footer {
+            flex-shrink: 0;
             padding: 24px 40px;
             background: rgba(0,0,0,0.3);
             border-top: 1px solid var(--border-subtle);
             display: flex;
-            justify-content: space-between;
+            justify-content: center;
             align-items: center;
+            gap: 16px;
         }
 
         /* Buttons */
@@ -1253,7 +1258,7 @@ export class OnboardingService {
         </div>
 
         <div class="footer">
-            <button class="btn btn-secondary" id="secondary-btn" style="visibility: hidden;">Skip</button>
+            <button class="btn btn-secondary" id="secondary-btn" style="display: none;">Skip</button>
             <button class="btn btn-primary" id="primary-btn">
                 <span id="btn-text">Get Started</span>
                 <svg class="arrow-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -1331,11 +1336,11 @@ export class OnboardingService {
 
                 const secondaryBtn = $('secondary-btn');
                 if (step.content.secondaryButton) {
-                    secondaryBtn.style.visibility = 'visible';
+                    secondaryBtn.style.display = 'inline-flex';
                     secondaryBtn.textContent = step.content.secondaryButton.text;
                     secondaryBtn.onclick = () => sendAction(step.content.secondaryButton.action);
                 } else {
-                    secondaryBtn.style.visibility = 'hidden';
+                    secondaryBtn.style.display = 'none';
                 }
 
                 // Custom content
