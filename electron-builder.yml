@@ -148,8 +148,9 @@ linux:
 # ===========================================
 # PUBLISH CONFIGURATION (for auto-updates)
 # ===========================================
-publish:
-  provider: github
-  owner: itskritix
-  repo: TypeCount
-  releaseType: release
+# Disabled - GitHub Actions workflow handles releases
+# publish:
+#   provider: github
+#   owner: itskritix
+#   repo: TypeCount
+#   releaseType: release
