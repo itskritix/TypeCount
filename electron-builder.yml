@@ -114,7 +114,7 @@ mac:
   entitlementsInherit: build/entitlements.mac.plist
 
 dmg:
-  background: build/dmg-background.png
+  # background: build/dmg-background.png
   iconSize: 100
   contents:
     - x: 130
