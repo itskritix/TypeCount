@@ -54,11 +54,24 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libx11-dev libxtst-dev libxkbcommon-dev libxkbcommon-x11-dev
 
-      # Build and package with Electron Forge
-      - name: Build and package application
+      # Build and package with electron-builder
+      - name: Build Windows app
+        if: matrix.os == 'windows-latest'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run make
+        run: npm run dist:win
+
+      - name: Build macOS app
+        if: matrix.os == 'macos-latest'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run dist:mac
+
+      - name: Build Linux app
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run dist:linux
 
       # Upload artifacts for each platform
       - name: Upload macOS artifacts
@@ -67,8 +80,8 @@ jobs:
         with:
           name: macos-installer
           path: |
-            out/make/**/*.dmg
-            out/make/**/*.zip
+            dist/*.dmg
+            dist/*.dmg.blockmap
           retention-days: 30
 
       - name: Upload Windows artifacts
@@ -77,8 +90,8 @@ jobs:
         with:
           name: windows-installer
           path: |
-            out/make/**/*.exe
-            out/make/**/*.nupkg
+            dist/*.exe
+            dist/*.exe.blockmap
           retention-days: 30
 
       - name: Upload Linux artifacts
@@ -87,8 +100,9 @@ jobs:
         with:
           name: linux-installers
           path: |
-            out/make/**/*.deb
-            out/make/**/*.rpm
+            dist/*.deb
+            dist/*.rpm
+            dist/*.AppImage
           retention-days: 30
 
   release:
