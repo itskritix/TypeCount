@@ -10,6 +10,7 @@ import { AutoUnpackNativesPlugin } from '@electron-forge/plugin-auto-unpack-nati
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
 import fs from 'fs-extra';
 import path from 'path';
+import 'dotenv/config'; // Load .env file
 
 // Check if custom installer assets exist
 const installerGifPath = './assets/installer/installing.gif';
