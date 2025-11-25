@@ -58,24 +58,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libx11-dev libxtst-dev libxkbcommon-dev libxkbcommon-x11-dev
 
-      # Build and package with electron-builder
-      - name: Build Windows app
-        if: matrix.os == 'windows-latest'
+      # Build and package with Electron Forge
+      - name: Build application
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run dist:win
-
-      - name: Build macOS app
-        if: matrix.os == 'macos-latest'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run dist:mac
-
-      - name: Build Linux app
-        if: matrix.os == 'ubuntu-latest'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run dist:linux
+          # Add your custom environment variables here from GitHub Secrets:
+          # MY_API_KEY: ${{ secrets.MY_API_KEY }}
+          # DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run make
 
       # Upload artifacts for each platform
       - name: Upload macOS artifacts
@@ -84,8 +74,8 @@ jobs:
         with:
           name: macos-installer
           path: |
-            dist/*.dmg
-            dist/*.dmg.blockmap
+            out/make/**/*.dmg
+            out/make/**/*.zip
           retention-days: 30
 
       - name: Upload Windows artifacts
@@ -94,8 +84,8 @@ jobs:
         with:
           name: windows-installer
           path: |
-            dist/*.exe
-            dist/*.exe.blockmap
+            out/make/**/*.exe
+            out/make/**/*.nupkg
           retention-days: 30
 
       - name: Upload Linux artifacts
@@ -104,9 +94,8 @@ jobs:
         with:
           name: linux-installers
           path: |
-            dist/*.deb
-            dist/*.rpm
-            dist/*.AppImage
+            out/make/**/*.deb
+            out/make/**/*.rpm
           retention-days: 30
 
   release:
