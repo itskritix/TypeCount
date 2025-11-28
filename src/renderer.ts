@@ -249,22 +249,26 @@ function renderProductivityChart() {
       datasets: [{
         label: 'Keystrokes',
         data,
-        borderColor: '#06b6d4', // Cyan
+        borderColor: '#FFD700', // Gold
         backgroundColor: (context) => {
           const ctx = context.chart.ctx;
           const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-          gradient.addColorStop(0, 'rgba(6, 182, 212, 0.5)');
-          gradient.addColorStop(1, 'rgba(6, 182, 212, 0.0)');
+          gradient.addColorStop(0, 'rgba(255, 215, 0, 0.4)');
+          gradient.addColorStop(0.5, 'rgba(255, 165, 0, 0.15)');
+          gradient.addColorStop(1, 'rgba(255, 140, 0, 0.0)');
           return gradient;
         },
-        borderWidth: 2,
+        borderWidth: 3,
         tension: 0.4,
         fill: true,
-        pointBackgroundColor: '#09090b',
-        pointBorderColor: '#8b5cf6', // Violet
-        pointBorderWidth: 2,
-        pointRadius: 4,
-        pointHoverRadius: 6
+        pointBackgroundColor: '#050505',
+        pointBorderColor: '#FFD700', // Gold
+        pointBorderWidth: 3,
+        pointRadius: 5,
+        pointHoverRadius: 8,
+        pointHoverBackgroundColor: '#FFD700',
+        pointHoverBorderColor: '#050505',
+        pointHoverBorderWidth: 2
       }]
     },
     options: {
@@ -275,24 +279,33 @@ function renderProductivityChart() {
         tooltip: {
           mode: 'index',
           intersect: false,
-          backgroundColor: 'rgba(9, 9, 11, 0.95)',
-          titleColor: '#fafafa',
-          bodyColor: '#a1a1aa',
-          borderColor: 'rgba(139, 92, 246, 0.3)',
+          backgroundColor: 'rgba(5, 5, 5, 0.95)',
+          titleColor: '#FFD700',
+          titleFont: { weight: 'bold', size: 13 },
+          bodyColor: '#fafafa',
+          bodyFont: { size: 14 },
+          borderColor: 'rgba(255, 215, 0, 0.3)',
           borderWidth: 1,
-          padding: 12,
+          padding: 14,
+          cornerRadius: 12,
           displayColors: false,
           callbacks: {
-            label: (context) => `Keystrokes: ${context.parsed.y.toLocaleString()}`
+            title: (items) => items[0]?.label || '',
+            label: (context) => `${context.parsed.y.toLocaleString()} keystrokes`
           }
         }
       },
       scales: {
         y: {
           beginAtZero: true,
-          grid: { color: gridColor },
-          ticks: { 
-            color: textColor,
+          grid: {
+            color: 'rgba(255, 215, 0, 0.06)',
+            lineWidth: 1
+          },
+          ticks: {
+            color: '#71717a',
+            font: { family: "'JetBrains Mono', monospace", size: 11 },
+            padding: 8,
             callback: (value) => {
               if (typeof value === 'number') {
                 return value >= 1000 ? `${(value/1000).toFixed(1)}k` : value;
@@ -304,7 +317,11 @@ function renderProductivityChart() {
         },
         x: {
           grid: { display: false },
-          ticks: { color: textColor },
+          ticks: {
+            color: '#71717a',
+            font: { family: "'DM Sans', sans-serif", size: 11 },
+            padding: 8
+          },
           border: { display: false }
         }
       },
@@ -314,7 +331,7 @@ function renderProductivityChart() {
         intersect: false
       },
       animation: {
-        duration: 750,
+        duration: 1000,
         easing: 'easeOutQuart'
       }
     }
@@ -335,42 +352,68 @@ function createDashboard() {
         </div>
         
         <!-- Gamification Header -->
-        <div class="user-level-container" style="text-align: right; min-width: 250px;">
-          <div class="level-info" style="margin-bottom: 0.5rem;">
-            <span class="level-badge" style="background: var(--accent-primary); color: white; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 0.8rem;">LVL <span id="user-level">1</span></span>
-            <span class="xp-text" style="font-size: 0.9rem; color: var(--text-secondary); margin-left: 8px;"><span id="user-xp">0</span> XP</span>
+        <div class="level-widget">
+          <div class="level-widget-header">
+            <div class="level-badge-wrapper">
+              <span class="level-badge">LVL</span>
+              <span class="level-number" id="user-level">1</span>
+            </div>
+            <div class="xp-info">
+              <span class="xp-current"><span id="user-xp">0</span> XP</span>
+              <span class="xp-next">/ <span id="next-level-xp">1000</span></span>
+            </div>
           </div>
-          <div class="xp-progress-bar" style="width: 100%; height: 6px; background: var(--bg-surface-hover); border-radius: 3px; overflow: hidden; position: relative;">
-            <div id="xp-fill" style="height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary)); transition: width 0.5s ease;"></div>
+          <div class="xp-progress-track">
+            <div class="xp-progress-fill" id="xp-fill"></div>
+            <div class="xp-progress-glow"></div>
           </div>
-          <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Next Level: <span id="next-level-xp">1000</span> XP</div>
         </div>
       </header>
 
       <!-- Key Metrics -->
       <div class="metrics-grid">
         <div class="metric-card metric-primary">
-          <div class="metric-header">
+          <div class="metric-icon-wrapper metric-icon-gold">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="4" width="20" height="16" rx="2"/>
+              <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M6 16h8"/>
+            </svg>
+          </div>
+          <div class="metric-content">
             <span class="metric-title">Total Keystrokes</span>
+            <div class="metric-value" id="total-count">0</div>
+            <div class="metric-subtitle">All time record</div>
           </div>
-          <div class="metric-value" id="total-count">0</div>
-          <div class="metric-subtitle">All time</div>
+          <div class="metric-decoration">⌨️</div>
         </div>
 
         <div class="metric-card">
-          <div class="metric-header">
+          <div class="metric-icon-wrapper metric-icon-cyan">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </div>
+          <div class="metric-content">
             <span class="metric-title">Today</span>
+            <div class="metric-value" id="today-count">0</div>
+            <div class="metric-subtitle">Keystrokes today</div>
           </div>
-          <div class="metric-value" id="today-count">0</div>
-          <div class="metric-subtitle">Keystrokes today</div>
+          <div class="metric-decoration">📊</div>
         </div>
 
         <div class="metric-card">
-          <div class="metric-header">
-            <span class="metric-title">Current Streak</span>
+          <div class="metric-icon-wrapper metric-icon-orange">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
+            </svg>
           </div>
-          <div class="metric-value" id="streak-count">0</div>
-          <div class="metric-subtitle">Active days</div>
+          <div class="metric-content">
+            <span class="metric-title">Current Streak</span>
+            <div class="metric-value"><span id="streak-count">0</span><span class="metric-unit">days</span></div>
+            <div class="metric-subtitle">Keep it going!</div>
+          </div>
+          <div class="metric-decoration streak-fire">🔥</div>
         </div>
       </div>
 
@@ -490,16 +533,19 @@ function renderInsightsView(container: HTMLElement) {
       </div>
 
       <!-- Chart Section -->
-      <div class="chart-section cyber-card" style="margin-top: 2rem; padding: 1.5rem; border: 1px solid var(--border-subtle); border-radius: 12px; background: rgba(9, 9, 11, 0.4);">
-        <div class="chart-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-          <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-primary);">Typing Consistency</h3>
-          <div class="chart-controls" style="display: flex; gap: 0.5rem; background: var(--bg-surface); padding: 4px; border-radius: 8px;">
-            <button class="cyber-button small ${currentChartTimeframe === 'weekly' ? 'active' : ''}" onclick="switchChartTimeframe('weekly')" style="font-size: 0.8rem; padding: 4px 12px; min-width: 60px;">Week</button>
-            <button class="cyber-button small ${currentChartTimeframe === 'monthly' ? 'active' : ''}" onclick="switchChartTimeframe('monthly')" style="font-size: 0.8rem; padding: 4px 12px; min-width: 60px;">Month</button>
-            <button class="cyber-button small ${currentChartTimeframe === 'yearly' ? 'active' : ''}" onclick="switchChartTimeframe('yearly')" style="font-size: 0.8rem; padding: 4px 12px; min-width: 60px;">Year</button>
+      <div class="chart-section">
+        <div class="chart-header">
+          <div class="chart-title-group">
+            <h3 class="chart-title">Typing Consistency</h3>
+            <p class="chart-subtitle">Track your productivity over time</p>
+          </div>
+          <div class="chart-controls">
+            <button class="chart-tab ${currentChartTimeframe === 'weekly' ? 'active' : ''}" onclick="switchChartTimeframe('weekly')">Week</button>
+            <button class="chart-tab ${currentChartTimeframe === 'monthly' ? 'active' : ''}" onclick="switchChartTimeframe('monthly')">Month</button>
+            <button class="chart-tab ${currentChartTimeframe === 'yearly' ? 'active' : ''}" onclick="switchChartTimeframe('yearly')">Year</button>
           </div>
         </div>
-        <div style="position: relative; height: 300px; width: 100%;">
+        <div class="chart-container">
           <canvas id="productivityChart"></canvas>
         </div>
       </div>

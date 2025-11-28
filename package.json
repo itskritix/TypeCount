@@ -15,11 +15,7 @@
     "postinstall": "npx @electron/rebuild --version=39.2.3",
     "generate:installer-gif": "node scripts/generate-installer-gif.js",
     "generate:installer-assets": "node scripts/generate-installer-assets.js",
-    "build": "electron-forge package",
-    "dist": "npm run build && electron-builder --publish never",
-    "dist:win": "npm run build && electron-builder --win --publish never",
-    "dist:mac": "npm run build && electron-builder --mac --publish never",
-    "dist:linux": "npm run build && electron-builder --linux --publish never"
+    "build": "electron-forge package"
   },
   "keywords": [
     "productivity",
@@ -63,7 +59,6 @@
     "@typescript-eslint/parser": "^5.62.0",
     "dotenv": "^17.2.3",
     "electron": "39.2.3",
-    "electron-builder": "^25.1.8",
     "eslint": "^8.57.1",
     "eslint-plugin-import": "^2.32.0",
     "fs-extra": "^11.3.2",

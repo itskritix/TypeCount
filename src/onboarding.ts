@@ -650,21 +650,26 @@ export class OnboardingService {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Welcome to TypeCount</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=DM+Sans:wght@400;500;600;700&display=swap');
+
         :root {
-            --bg-dark: #050507;
-            --bg-card: #0a0a0f;
-            --bg-surface: #111118;
+            --bg-dark: #050505;
+            --bg-card: #0a0a0a;
+            --bg-surface: #0d0d0d;
             --text-primary: #ffffff;
-            --text-secondary: #71717a;
+            --text-secondary: #a1a1aa;
             --text-muted: #52525b;
-            --accent-cyan: #06b6d4;
-            --accent-violet: #8b5cf6;
+            --gold: #FFD700;
+            --gold-light: #FFE55C;
+            --gold-dark: #CC9900;
+            --cyan: #00F5FF;
+            --cyan-dark: #00C4CC;
             --accent-emerald: #10b981;
             --accent-amber: #f59e0b;
             --accent-rose: #f43f5e;
             --border-subtle: rgba(255,255,255,0.06);
-            --border-glow: rgba(6, 182, 212, 0.3);
-            --gradient-primary: linear-gradient(135deg, #06b6d4, #8b5cf6);
+            --border-glow: rgba(255, 215, 0, 0.3);
+            --gradient-primary: linear-gradient(135deg, var(--gold), var(--gold-dark));
             --gradient-shine: linear-gradient(135deg, rgba(255,255,255,0.1), transparent);
         }
 
@@ -675,7 +680,7 @@ export class OnboardingService {
         }
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
             background: var(--bg-dark);
             color: var(--text-primary);
             height: 100vh;
@@ -706,30 +711,32 @@ export class OnboardingService {
         .orb-1 {
             width: 400px;
             height: 400px;
-            background: var(--accent-cyan);
+            background: var(--gold);
             top: -100px;
             left: -100px;
             animation-delay: 0s;
+            opacity: 0.15;
         }
 
         .orb-2 {
             width: 350px;
             height: 350px;
-            background: var(--accent-violet);
+            background: var(--cyan);
             bottom: -80px;
             right: -80px;
             animation-delay: -7s;
+            opacity: 0.1;
         }
 
         .orb-3 {
             width: 200px;
             height: 200px;
-            background: var(--accent-emerald);
+            background: var(--gold-light);
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
             animation-delay: -14s;
-            opacity: 0.2;
+            opacity: 0.1;
         }
 
         @keyframes float {
@@ -744,8 +751,8 @@ export class OnboardingService {
             position: absolute;
             inset: 0;
             background-image:
-                linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+                linear-gradient(rgba(255, 215, 0, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 215, 0, 0.02) 1px, transparent 1px);
             background-size: 50px 50px;
             mask-image: radial-gradient(ellipse at center, black 30%, transparent 70%);
         }
@@ -760,16 +767,17 @@ export class OnboardingService {
             width: 900px;
             height: calc(100vh - 80px);
             max-height: 900px;
-            background: rgba(10, 10, 15, 0.8);
+            background: rgba(10, 10, 10, 0.85);
             backdrop-filter: blur(40px);
-            border: 1px solid var(--border-subtle);
+            border: 1px solid rgba(255, 215, 0, 0.1);
             border-radius: 24px;
             display: flex;
             flex-direction: column;
             overflow: hidden;
             box-shadow:
-                0 0 0 1px rgba(255,255,255,0.05),
+                0 0 0 1px rgba(255, 215, 0, 0.05),
                 0 25px 50px -12px rgba(0,0,0,0.8),
+                0 0 80px rgba(255, 215, 0, 0.05),
                 inset 0 1px 0 rgba(255,255,255,0.05);
         }
 
@@ -822,12 +830,12 @@ export class OnboardingService {
         }
 
         .step-dot.active {
-            background: var(--accent-cyan);
-            box-shadow: 0 0 12px var(--accent-cyan);
+            background: var(--gold);
+            box-shadow: 0 0 12px rgba(255, 215, 0, 0.5);
         }
 
         .step-dot.completed {
-            background: var(--accent-emerald);
+            background: var(--cyan);
         }
 
         /* Content area */
@@ -858,7 +866,7 @@ export class OnboardingService {
         .logo {
             width: 90px;
             height: 90px;
-            filter: drop-shadow(0 10px 40px rgba(144, 144, 144, 0.4));
+            filter: drop-shadow(0 10px 40px rgba(255, 215, 0, 0.3));
             animation: logo-float 4s ease-in-out infinite;
         }
 
@@ -909,9 +917,10 @@ export class OnboardingService {
         .step-badge-dot {
             width: 6px;
             height: 6px;
-            background: var(--accent-cyan);
+            background: var(--gold);
             border-radius: 50%;
             animation: pulse 2s ease-in-out infinite;
+            box-shadow: 0 0 8px rgba(255, 215, 0, 0.4);
         }
 
         @keyframes pulse {
@@ -921,21 +930,23 @@ export class OnboardingService {
 
         /* Headlines */
         .headline {
+            font-family: 'Archivo Black', sans-serif;
             font-size: 42px;
             font-weight: 800;
-            letter-spacing: -1.5px;
+            letter-spacing: -1px;
             line-height: 1.1;
             margin-bottom: 12px;
-            background: linear-gradient(180deg, #ffffff 0%, #a1a1aa 100%);
+            background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 50%, var(--gold) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
+            text-shadow: 0 0 40px rgba(255, 215, 0, 0.3);
         }
 
         .subheadline {
             font-size: 18px;
             font-weight: 500;
-            background: var(--gradient-primary);
+            background: linear-gradient(135deg, var(--cyan), var(--cyan-dark));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -973,7 +984,7 @@ export class OnboardingService {
 
         .feature-card:hover {
             background: rgba(255,255,255,0.04);
-            border-color: rgba(6, 182, 212, 0.2);
+            border-color: rgba(255, 215, 0, 0.2);
             transform: translateY(-2px);
         }
 
@@ -988,10 +999,10 @@ export class OnboardingService {
             flex-shrink: 0;
         }
 
-        .feature-icon.cyan { background: rgba(6, 182, 212, 0.15); color: var(--accent-cyan); }
-        .feature-icon.violet { background: rgba(139, 92, 246, 0.15); color: var(--accent-violet); }
+        .feature-icon.cyan { background: rgba(0, 245, 255, 0.1); color: var(--cyan); }
+        .feature-icon.violet { background: rgba(255, 215, 0, 0.1); color: var(--gold); }
         .feature-icon.emerald { background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); }
-        .feature-icon.amber { background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); }
+        .feature-icon.amber { background: rgba(255, 140, 0, 0.15); color: #FF8C00; }
 
         .feature-text {
             font-size: 13px;
@@ -1013,21 +1024,21 @@ export class OnboardingService {
             justify-content: center;
             gap: 14px;
             padding: 16px 24px;
-            background: rgba(6, 182, 212, 0.05);
-            border: 1px solid rgba(6, 182, 212, 0.15);
+            background: rgba(255, 215, 0, 0.05);
+            border: 1px solid rgba(255, 215, 0, 0.15);
             border-radius: 14px;
             cursor: pointer;
             transition: all 0.2s ease;
         }
 
         .privacy-toggle:hover {
-            background: rgba(6, 182, 212, 0.08);
-            border-color: rgba(6, 182, 212, 0.3);
+            background: rgba(255, 215, 0, 0.08);
+            border-color: rgba(255, 215, 0, 0.3);
         }
 
         .privacy-toggle.checked {
-            background: rgba(16, 185, 129, 0.1);
-            border-color: rgba(16, 185, 129, 0.3);
+            background: rgba(0, 245, 255, 0.1);
+            border-color: rgba(0, 245, 255, 0.3);
         }
 
         .checkbox-custom {
@@ -1043,8 +1054,8 @@ export class OnboardingService {
         }
 
         .privacy-toggle.checked .checkbox-custom {
-            background: var(--accent-emerald);
-            border-color: var(--accent-emerald);
+            background: var(--cyan);
+            border-color: var(--cyan);
         }
 
         .checkbox-custom svg {
@@ -1097,13 +1108,14 @@ export class OnboardingService {
         }
 
         .btn-primary {
-            background: var(--gradient-primary);
-            color: white;
+            background: linear-gradient(135deg, var(--gold), var(--gold-dark));
+            color: #000;
             position: relative;
             overflow: hidden;
+            font-weight: 700;
             box-shadow:
-                0 0 20px rgba(6, 182, 212, 0.3),
-                0 4px 15px rgba(139, 92, 246, 0.2);
+                0 0 20px rgba(255, 215, 0, 0.3),
+                0 4px 15px rgba(255, 215, 0, 0.2);
         }
 
         .btn-primary::before {
@@ -1122,8 +1134,8 @@ export class OnboardingService {
         .btn-primary:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow:
-                0 0 30px rgba(6, 182, 212, 0.4),
-                0 8px 25px rgba(139, 92, 246, 0.3);
+                0 0 30px rgba(255, 215, 0, 0.4),
+                0 8px 25px rgba(255, 215, 0, 0.3);
         }
 
         .btn-primary:active:not(:disabled) {
@@ -1214,32 +1226,46 @@ export class OnboardingService {
                     <svg viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <defs>
                             <linearGradient id="ob_bg_grad" x1="512" y1="0" x2="512" y2="1024" gradientUnits="userSpaceOnUse">
-                                <stop offset="0" stop-color="#4a4a4a"/>
-                                <stop offset="1" stop-color="#2b2b2b"/>
+                                <stop offset="0" stop-color="#1a1a1a"/>
+                                <stop offset="1" stop-color="#0a0a0a"/>
                             </linearGradient>
                             <linearGradient id="ob_glass_surface" x1="112" y1="112" x2="912" y2="912" gradientUnits="userSpaceOnUse">
-                                <stop offset="0" stop-color="white" stop-opacity="0.4"/>
-                                <stop offset="0.5" stop-color="white" stop-opacity="0.1"/>
-                                <stop offset="1" stop-color="white" stop-opacity="0.05"/>
+                                <stop offset="0" stop-color="#FFD700" stop-opacity="0.15"/>
+                                <stop offset="0.5" stop-color="#FFD700" stop-opacity="0.05"/>
+                                <stop offset="1" stop-color="#FFD700" stop-opacity="0.02"/>
                             </linearGradient>
                             <linearGradient id="ob_glass_border" x1="112" y1="112" x2="912" y2="912" gradientUnits="userSpaceOnUse">
-                                <stop offset="0" stop-color="white" stop-opacity="0.8"/>
-                                <stop offset="1" stop-color="white" stop-opacity="0.1"/>
+                                <stop offset="0" stop-color="#FFD700" stop-opacity="0.6"/>
+                                <stop offset="1" stop-color="#FFD700" stop-opacity="0.1"/>
                             </linearGradient>
                             <linearGradient id="ob_liquid_grad" x1="300" y1="300" x2="700" y2="700" gradientUnits="userSpaceOnUse">
-                                <stop offset="0" stop-color="#e0e0e0"/>
-                                <stop offset="1" stop-color="#909090"/>
+                                <stop offset="0" stop-color="#FFE55C"/>
+                                <stop offset="0.5" stop-color="#FFD700"/>
+                                <stop offset="1" stop-color="#CC9900"/>
                             </linearGradient>
                             <radialGradient id="ob_liquid_highlight" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(450 400) rotate(45) scale(150)">
                                 <stop offset="0" stop-color="white" stop-opacity="0.95"/>
                                 <stop offset="1" stop-color="white" stop-opacity="0"/>
                             </radialGradient>
+                            <filter id="ob_glow">
+                                <feGaussianBlur stdDeviation="8" in="SourceAlpha" result="blur"/>
+                                <feSpecularLighting in="blur" surfaceScale="5" specularConstant="1.2" specularExponent="30" lighting-color="#FFD700" result="specular">
+                                    <fePointLight x="300" y="300" z="300"/>
+                                </feSpecularLighting>
+                                <feComposite in="specular" in2="SourceAlpha" operator="in" result="composite"/>
+                                <feMerge>
+                                    <feMergeNode in="SourceGraphic"/>
+                                    <feMergeNode in="composite"/>
+                                </feMerge>
+                            </filter>
                         </defs>
                         <rect x="112" y="112" width="800" height="800" rx="180" fill="url(#ob_bg_grad)"/>
                         <rect x="112" y="112" width="800" height="800" rx="180" fill="url(#ob_glass_surface)"/>
-                        <rect x="112" y="112" width="800" height="800" rx="180" stroke="url(#ob_glass_border)" stroke-width="6"/>
-                        <path d="M512 280 C 680 240, 760 400, 740 512 C 720 650, 600 760, 512 740 C 400 720, 280 640, 300 512 C 320 380, 420 300, 512 280 Z" fill="url(#ob_liquid_grad)"/>
-                        <ellipse cx="420" cy="420" rx="80" ry="50" transform="rotate(-30 420 420)" fill="url(#ob_liquid_highlight)"/>
+                        <rect x="112" y="112" width="800" height="800" rx="180" stroke="url(#ob_glass_border)" stroke-width="4"/>
+                        <g filter="url(#ob_glow)">
+                            <path d="M512 280 C 680 240, 760 400, 740 512 C 720 650, 600 760, 512 740 C 400 720, 280 640, 300 512 C 320 380, 420 300, 512 280 Z" fill="url(#ob_liquid_grad)"/>
+                            <ellipse cx="420" cy="420" rx="80" ry="50" transform="rotate(-30 420 420)" fill="url(#ob_liquid_highlight)"/>
+                        </g>
                     </svg>
                 </div>
             </div>
@@ -1393,7 +1419,7 @@ export class OnboardingService {
             const container = document.createElement('div');
             container.className = 'celebration';
 
-            const colors = ['#06b6d4', '#8b5cf6', '#10b981', '#f59e0b', '#f43f5e'];
+            const colors = ['#FFD700', '#FFE55C', '#00F5FF', '#FF8C00', '#10b981'];
 
             for (let i = 0; i < 50; i++) {
                 const confetti = document.createElement('div');

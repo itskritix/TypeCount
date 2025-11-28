@@ -620,15 +620,21 @@ const formatKeystrokeCount = (count: number): string => {
 const createDynamicTrayIcon = (count: number): Electron.NativeImage => {
   const formattedCount = formatKeystrokeCount(count);
 
-  // Create SVG with count text
+  // Create SVG with count text - Gold theme
   const size = 32;
   const fontSize = formattedCount.length > 3 ? 8 : formattedCount.length > 2 ? 10 : 12;
 
   const svg = `
     <svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="${size/2}" cy="${size/2}" r="${size/2-2}" fill="rgba(0,0,0,0.8)" stroke="white" stroke-width="1"/>
+      <defs>
+        <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:#FFD700"/>
+          <stop offset="100%" style="stop-color:#CC9900"/>
+        </linearGradient>
+      </defs>
+      <circle cx="${size/2}" cy="${size/2}" r="${size/2-2}" fill="rgba(5,5,5,0.95)" stroke="url(#goldGrad)" stroke-width="1.5"/>
       <text x="${size/2}" y="${size/2}" text-anchor="middle" dominant-baseline="central"
-            fill="white" font-family="system-ui, -apple-system, sans-serif"
+            fill="#FFD700" font-family="system-ui, -apple-system, sans-serif"
             font-size="${fontSize}" font-weight="bold">${formattedCount}</text>
     </svg>
   `;
@@ -639,14 +645,20 @@ const createDynamicTrayIcon = (count: number): Electron.NativeImage => {
 };
 
 const createReadyTrayIcon = (): Electron.NativeImage => {
-  // Create a welcoming "ready" icon for new users
+  // Create a welcoming "ready" icon for new users - Gold theme
   const size = 32;
 
   const svg = `
     <svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="${size/2}" cy="${size/2}" r="${size/2-2}" fill="rgba(34,139,34,0.8)" stroke="white" stroke-width="1"/>
+      <defs>
+        <linearGradient id="goldGradReady" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:#FFD700"/>
+          <stop offset="100%" style="stop-color:#CC9900"/>
+        </linearGradient>
+      </defs>
+      <circle cx="${size/2}" cy="${size/2}" r="${size/2-2}" fill="rgba(5,5,5,0.95)" stroke="url(#goldGradReady)" stroke-width="1.5"/>
       <text x="${size/2}" y="${size/2}" text-anchor="middle" dominant-baseline="central"
-            fill="white" font-family="system-ui, -apple-system, sans-serif"
+            fill="#FFD700" font-family="system-ui, -apple-system, sans-serif"
             font-size="12" font-weight="bold">✓</text>
     </svg>
   `;
@@ -733,18 +745,28 @@ const createWidget = () => {
     <head>
       <meta charset="UTF-8">
       <style>
+        @import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
         :root {
-          --hud-primary: #06b6d4; /* Cyan */
-          --hud-secondary: #8b5cf6; /* Violet */
-          --hud-bg: rgba(10, 10, 12, 0.92);
-          --hud-dim: rgba(6, 182, 212, 0.2);
+          --gold: #FFD700;
+          --gold-light: #FFE55C;
+          --gold-dark: #CC9900;
+          --cyan: #00F5FF;
+          --cyan-dark: #00C4CC;
+          --bg-app: #050505;
+          --bg-card: rgba(15, 15, 15, 0.95);
+          --text-primary: #fafafa;
+          --text-secondary: #a1a1aa;
+          --glow-gold: 0 0 20px rgba(255, 215, 0, 0.4);
+          --glow-cyan: 0 0 15px rgba(0, 245, 255, 0.3);
         }
+
         body {
           margin: 0;
           padding: 0;
-          font-family: 'Consolas', 'Monaco', monospace;
+          font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
           background: transparent;
-          color: var(--hud-primary);
+          color: var(--text-primary);
           overflow: hidden;
           user-select: none;
           height: 100vh;
@@ -753,167 +775,199 @@ const createWidget = () => {
           justify-content: center;
         }
 
-        .hud-frame {
+        .widget-container {
           width: 220px;
           height: 130px;
-          background: var(--hud-bg);
+          background: var(--bg-card);
+          border-radius: 16px;
           position: relative;
-          clip-path: polygon(
-            15px 0, 100% 0, 
-            100% calc(100% - 15px), calc(100% - 15px) 100%, 
-            0 100%, 0 15px
-          );
           display: flex;
           flex-direction: column;
           padding: 2px;
           -webkit-app-region: drag;
           cursor: move;
+          backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 215, 0, 0.15);
+          box-shadow:
+            0 4px 24px rgba(0, 0, 0, 0.5),
+            0 0 40px rgba(255, 215, 0, 0.05),
+            inset 0 1px 0 rgba(255, 255, 255, 0.05);
         }
 
-        .hud-frame::before {
+        .widget-container::before {
           content: '';
           position: absolute;
-          top: 0; left: 0; right: 0; bottom: 0;
-          background: linear-gradient(135deg, var(--hud-primary), var(--hud-secondary));
-          z-index: -1;
+          top: 0;
+          left: 0;
+          right: 0;
+          height: 1px;
+          background: linear-gradient(90deg, transparent, var(--gold), transparent);
+          opacity: 0.5;
+          border-radius: 16px 16px 0 0;
         }
 
         .inner-content {
-          background: #09090b;
+          background: linear-gradient(180deg, rgba(20, 20, 20, 0.98) 0%, rgba(10, 10, 10, 0.98) 100%);
           flex: 1;
-          clip-path: polygon(
-            14px 0, 100% 0, 
-            100% calc(100% - 14px), calc(100% - 14px) 100%, 
-            0 100%, 0 14px
-          );
+          border-radius: 14px;
           display: flex;
           flex-direction: column;
-          padding: 10px 14px;
+          padding: 12px 16px;
           position: relative;
+          overflow: hidden;
         }
 
-        .scanlines {
+        .inner-content::after {
+          content: '';
           position: absolute;
-          top: 0; left: 0; right: 0; bottom: 0;
-          background: linear-gradient(
-            to bottom,
-            rgba(255,255,255,0),
-            rgba(255,255,255,0) 50%,
-            rgba(0,0,0,0.2) 50%,
-            rgba(0,0,0,0.2)
-          );
-          background-size: 100% 4px;
+          top: 0;
+          right: 0;
+          width: 60px;
+          height: 60px;
+          background: radial-gradient(circle, rgba(255, 215, 0, 0.08) 0%, transparent 70%);
           pointer-events: none;
-          opacity: 0.6;
-          z-index: 10;
         }
 
         .header {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          margin-bottom: 2px;
-          font-size: 8px;
-          letter-spacing: 1px;
-          color: var(--hud-secondary);
-          opacity: 0.8;
+          margin-bottom: 6px;
+        }
+
+        .brand {
+          font-family: 'Archivo Black', sans-serif;
+          font-size: 9px;
+          letter-spacing: 2px;
+          background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 50%, var(--gold) 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          text-transform: uppercase;
+        }
+
+        .status-indicator {
+          display: flex;
+          align-items: center;
+          gap: 4px;
         }
 
         .status-dot {
-          width: 4px; height: 4px;
-          background: var(--hud-primary);
+          width: 5px;
+          height: 5px;
+          background: var(--gold);
           border-radius: 50%;
-          box-shadow: 0 0 5px var(--hud-primary);
-          animation: blink 2s infinite;
+          box-shadow: var(--glow-gold);
+          animation: pulse 2s ease-in-out infinite;
         }
 
-        /* HERO STAT: TOTAL */
+        /* Hero Stat: Total Keystrokes */
         .hero-section {
           text-align: right;
-          margin-bottom: 8px;
-          border-bottom: 1px solid rgba(139, 92, 246, 0.2);
-          padding-bottom: 4px;
+          margin-bottom: 10px;
+          padding-bottom: 8px;
+          border-bottom: 1px solid rgba(255, 215, 0, 0.1);
         }
 
         .label-hero {
-          font-size: 9px;
-          color: var(--hud-secondary);
-          letter-spacing: 1px;
-          margin-bottom: -2px;
+          font-size: 8px;
+          font-weight: 600;
+          color: var(--text-secondary);
+          letter-spacing: 1.5px;
+          text-transform: uppercase;
+          margin-bottom: 2px;
         }
 
         .count-hero {
-          font-size: 36px;
-          font-weight: 700;
-          color: #fff;
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 32px;
+          font-weight: 600;
+          background: linear-gradient(135deg, #fff 0%, var(--gold-light) 50%, var(--gold) 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
           line-height: 1;
-          text-shadow: 0 0 15px var(--hud-secondary); /* Violet glow for hero */
+          text-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
           font-variant-numeric: tabular-nums;
         }
 
-        /* SECONDARY STAT: TODAY */
+        /* Secondary Stat: Today */
         .sub-section {
           display: flex;
           justify-content: space-between;
           align-items: center;
+          margin-bottom: 8px;
         }
 
         .label-sub {
           font-size: 9px;
-          color: #a1a1aa;
+          font-weight: 500;
+          color: var(--text-secondary);
+          letter-spacing: 0.5px;
         }
 
         .count-sub {
-          font-size: 18px;
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 16px;
           font-weight: 600;
-          color: var(--hud-primary); /* Cyan for session */
-          text-shadow: 0 0 8px rgba(6, 182, 212, 0.4);
+          color: var(--cyan);
+          text-shadow: var(--glow-cyan);
         }
 
         /* Activity Bar */
         .activity-display {
           margin-top: auto;
           display: flex;
-          gap: 2px;
+          gap: 3px;
           height: 4px;
         }
 
         .segment {
           flex: 1;
-          background: var(--hud-dim);
-          transform: skewX(-20deg);
-          transition: background 0.1s;
+          background: rgba(255, 215, 0, 0.1);
+          border-radius: 2px;
+          transition: all 0.15s ease;
         }
 
-        .segment.active { background: var(--hud-primary); box-shadow: 0 0 5px var(--hud-primary); }
-        .segment.peak { background: var(--hud-secondary); box-shadow: 0 0 5px var(--hud-secondary); }
+        .segment.active {
+          background: linear-gradient(180deg, var(--gold-light), var(--gold));
+          box-shadow: 0 0 8px rgba(255, 215, 0, 0.5);
+        }
 
-        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .segment.peak {
+          background: linear-gradient(180deg, var(--cyan), var(--cyan-dark));
+          box-shadow: 0 0 10px rgba(0, 245, 255, 0.6);
+        }
+
+        @keyframes pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.5; transform: scale(0.9); }
+        }
       </style>
     </head>
     <body>
-      <div class="hud-frame">
+      <div class="widget-container">
         <div class="inner-content">
-          <div class="scanlines"></div>
-          
           <div class="header">
-            <span>TYPECOUNT.SYS</span>
-            <div class="status-dot"></div>
+            <span class="brand">TypeCount</span>
+            <div class="status-indicator">
+              <div class="status-dot"></div>
+            </div>
           </div>
 
-          <!-- HERO: TOTAL -->
+          <!-- Hero: Total Keystrokes -->
           <div class="hero-section">
-            <div class="label-hero">LIFETIME</div>
+            <div class="label-hero">Lifetime</div>
             <div class="count-hero" id="total-count">0</div>
           </div>
 
-          <!-- SUB: TODAY -->
+          <!-- Sub: Today's Count -->
           <div class="sub-section">
-            <div class="label-sub">SESSION</div>
+            <div class="label-sub">Today</div>
             <div class="count-sub" id="today-count">0</div>
           </div>
 
-          <!-- Activity -->
+          <!-- Activity Bar -->
           <div class="activity-display" id="activity-segments">
             <div class="segment"></div><div class="segment"></div>
             <div class="segment"></div><div class="segment"></div>
@@ -932,7 +986,7 @@ const createWidget = () => {
         const updateWidget = (data) => {
           const totalEl = document.getElementById('total-count');
           const todayEl = document.getElementById('today-count');
-          
+
           const total = data.total || 0;
           const today = data.today || 0;
 

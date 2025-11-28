@@ -69,6 +69,8 @@ function getSplashHTML(): string {
     <meta charset="UTF-8">
     <title>TypeCount</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=DM+Sans:wght@400;500;600;700&display=swap');
+
         * {
             margin: 0;
             padding: 0;
@@ -115,8 +117,13 @@ function getSplashHTML(): string {
             40% { transform: scale(1); opacity: 1; }
         }
 
+        @keyframes goldGlow {
+            0%, 100% { box-shadow: 0 0 20px rgba(255, 215, 0, 0.3); }
+            50% { box-shadow: 0 0 40px rgba(255, 215, 0, 0.5); }
+        }
+
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
             background: transparent;
             height: 100vh;
             display: flex;
@@ -129,20 +136,21 @@ function getSplashHTML(): string {
         .splash-container {
             width: 440px;
             height: 280px;
-            background: linear-gradient(135deg, #0a0a0f 0%, #111118 50%, #0a0a0f 100%);
+            background: linear-gradient(135deg, #050505 0%, #0a0a0a 50%, #050505 100%);
             background-size: 200% 200%;
             animation: gradientShift 8s ease infinite;
             border-radius: 24px;
             position: relative;
             overflow: hidden;
+            border: 1px solid rgba(255, 215, 0, 0.15);
             box-shadow:
-                0 0 0 1px rgba(255, 255, 255, 0.05),
+                0 0 0 1px rgba(255, 215, 0, 0.05),
                 0 25px 50px -12px rgba(0, 0, 0, 0.8),
-                0 0 100px rgba(6, 182, 212, 0.1),
-                0 0 100px rgba(139, 92, 246, 0.1);
+                0 0 80px rgba(255, 215, 0, 0.08),
+                0 0 120px rgba(0, 245, 255, 0.05);
         }
 
-        /* Animated background orbs */
+        /* Animated background orbs - Gold theme */
         .orb {
             position: absolute;
             border-radius: 50%;
@@ -153,7 +161,7 @@ function getSplashHTML(): string {
         .orb-1 {
             width: 200px;
             height: 200px;
-            background: rgba(74, 74, 74, 0.4);
+            background: rgba(255, 215, 0, 0.15);
             top: -50px;
             left: -50px;
             animation-delay: 0s;
@@ -162,7 +170,7 @@ function getSplashHTML(): string {
         .orb-2 {
             width: 180px;
             height: 180px;
-            background: rgba(144, 144, 144, 0.3);
+            background: rgba(0, 245, 255, 0.1);
             bottom: -40px;
             right: -40px;
             animation-delay: -2s;
@@ -171,7 +179,7 @@ function getSplashHTML(): string {
         .orb-3 {
             width: 100px;
             height: 100px;
-            background: rgba(224, 224, 224, 0.15);
+            background: rgba(255, 215, 0, 0.2);
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
@@ -183,8 +191,8 @@ function getSplashHTML(): string {
             position: absolute;
             inset: 0;
             background-image:
-                linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+                linear-gradient(rgba(255, 215, 0, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 215, 0, 0.02) 1px, transparent 1px);
             background-size: 30px 30px;
             mask-image: radial-gradient(ellipse at center, black 20%, transparent 70%);
         }
@@ -211,7 +219,7 @@ function getSplashHTML(): string {
         .logo {
             width: 80px;
             height: 80px;
-            filter: drop-shadow(0 10px 30px rgba(144, 144, 144, 0.4));
+            filter: drop-shadow(0 10px 30px rgba(255, 215, 0, 0.3));
         }
 
         .logo svg {
@@ -221,16 +229,18 @@ function getSplashHTML(): string {
 
         /* Text */
         .app-name {
+            font-family: 'Archivo Black', sans-serif;
             font-size: 32px;
             font-weight: 800;
-            letter-spacing: -1px;
-            background: linear-gradient(180deg, #ffffff 0%, #a1a1aa 100%);
+            letter-spacing: 2px;
+            background: linear-gradient(135deg, #FFD700 0%, #FFE55C 50%, #FFD700 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             animation: fadeInUp 0.6s ease forwards;
             animation-delay: 0.1s;
             opacity: 0;
             margin-bottom: 8px;
+            text-transform: uppercase;
         }
 
         .tagline {
@@ -262,8 +272,9 @@ function getSplashHTML(): string {
             width: 8px;
             height: 8px;
             border-radius: 50%;
-            background: linear-gradient(135deg, #4a4a4a, #909090, #e0e0e0);
+            background: linear-gradient(135deg, #CC9900, #FFD700, #FFE55C);
             animation: dotPulse 1.4s ease-in-out infinite;
+            box-shadow: 0 0 10px rgba(255, 215, 0, 0.4);
         }
 
         .loader-dot:nth-child(1) { animation-delay: 0s; }
@@ -272,7 +283,7 @@ function getSplashHTML(): string {
 
         .status {
             font-size: 12px;
-            color: #52525b;
+            color: #71717a;
             letter-spacing: 0.5px;
         }
 
@@ -286,7 +297,7 @@ function getSplashHTML(): string {
             background: linear-gradient(
                 90deg,
                 transparent,
-                rgba(255, 255, 255, 0.03),
+                rgba(255, 215, 0, 0.03),
                 transparent
             );
             animation: shimmer 3s infinite;
@@ -298,7 +309,7 @@ function getSplashHTML(): string {
             bottom: 16px;
             right: 20px;
             font-size: 10px;
-            color: #3f3f46;
+            color: #52525b;
             letter-spacing: 0.5px;
         }
     </style>
@@ -317,32 +328,38 @@ function getSplashHTML(): string {
                     <svg viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <defs>
                             <linearGradient id="bg_grad" x1="512" y1="0" x2="512" y2="1024" gradientUnits="userSpaceOnUse">
-                                <stop offset="0" stop-color="#4a4a4a"/>
-                                <stop offset="1" stop-color="#2b2b2b"/>
+                                <stop offset="0" stop-color="#1a1a1a"/>
+                                <stop offset="1" stop-color="#0a0a0a"/>
+                            </linearGradient>
+                            <linearGradient id="gold_grad" x1="112" y1="112" x2="912" y2="912" gradientUnits="userSpaceOnUse">
+                                <stop offset="0" stop-color="#FFD700"/>
+                                <stop offset="0.5" stop-color="#FFE55C"/>
+                                <stop offset="1" stop-color="#CC9900"/>
                             </linearGradient>
                             <linearGradient id="glass_surface" x1="112" y1="112" x2="912" y2="912" gradientUnits="userSpaceOnUse">
-                                <stop offset="0" stop-color="white" stop-opacity="0.4"/>
-                                <stop offset="0.5" stop-color="white" stop-opacity="0.1"/>
-                                <stop offset="1" stop-color="white" stop-opacity="0.05"/>
+                                <stop offset="0" stop-color="#FFD700" stop-opacity="0.15"/>
+                                <stop offset="0.5" stop-color="#FFD700" stop-opacity="0.05"/>
+                                <stop offset="1" stop-color="#FFD700" stop-opacity="0.02"/>
                             </linearGradient>
                             <linearGradient id="glass_border" x1="112" y1="112" x2="912" y2="912" gradientUnits="userSpaceOnUse">
-                                <stop offset="0" stop-color="white" stop-opacity="0.8"/>
-                                <stop offset="1" stop-color="white" stop-opacity="0.1"/>
+                                <stop offset="0" stop-color="#FFD700" stop-opacity="0.6"/>
+                                <stop offset="1" stop-color="#FFD700" stop-opacity="0.1"/>
                             </linearGradient>
                             <linearGradient id="liquid_grad" x1="300" y1="300" x2="700" y2="700" gradientUnits="userSpaceOnUse">
-                                <stop offset="0" stop-color="#e0e0e0"/>
-                                <stop offset="1" stop-color="#909090"/>
+                                <stop offset="0" stop-color="#FFE55C"/>
+                                <stop offset="0.5" stop-color="#FFD700"/>
+                                <stop offset="1" stop-color="#CC9900"/>
                             </linearGradient>
                             <radialGradient id="liquid_highlight" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(450 400) rotate(45) scale(150)">
                                 <stop offset="0" stop-color="white" stop-opacity="0.95"/>
                                 <stop offset="1" stop-color="white" stop-opacity="0"/>
                             </radialGradient>
                             <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
-                                <feDropShadow dx="0" dy="20" stdDeviation="30" flood-color="black" flood-opacity="0.4"/>
+                                <feDropShadow dx="0" dy="20" stdDeviation="30" flood-color="#FFD700" flood-opacity="0.2"/>
                             </filter>
                             <filter id="blob_glow">
-                                <feGaussianBlur stdDeviation="5" in="SourceAlpha" result="blur"/>
-                                <feSpecularLighting in="blur" surfaceScale="5" specularConstant="1.2" specularExponent="30" lighting-color="white" result="specular">
+                                <feGaussianBlur stdDeviation="8" in="SourceAlpha" result="blur"/>
+                                <feSpecularLighting in="blur" surfaceScale="5" specularConstant="1.2" specularExponent="30" lighting-color="#FFD700" result="specular">
                                     <fePointLight x="300" y="300" z="300"/>
                                 </feSpecularLighting>
                                 <feComposite in="specular" in2="SourceAlpha" operator="in" result="composite"/>
@@ -354,12 +371,12 @@ function getSplashHTML(): string {
                         </defs>
                         <rect x="112" y="112" width="800" height="800" rx="180" fill="url(#bg_grad)" filter="url(#shadow)"/>
                         <rect x="112" y="112" width="800" height="800" rx="180" fill="url(#glass_surface)"/>
-                        <rect x="112" y="112" width="800" height="800" rx="180" stroke="url(#glass_border)" stroke-width="6"/>
+                        <rect x="112" y="112" width="800" height="800" rx="180" stroke="url(#glass_border)" stroke-width="4"/>
                         <g filter="url(#blob_glow)">
                             <path d="M512 280 C 680 240, 760 400, 740 512 C 720 650, 600 760, 512 740 C 400 720, 280 640, 300 512 C 320 380, 420 300, 512 280 Z" fill="url(#liquid_grad)"/>
                             <ellipse cx="420" cy="420" rx="80" ry="50" transform="rotate(-30 420 420)" fill="url(#liquid_highlight)"/>
                         </g>
-                        <path d="M112 112 L 912 912 L 912 112 Z" fill="white" fill-opacity="0.03" style="mix-blend-mode: overlay;"/>
+                        <path d="M112 112 L 912 912 L 912 112 Z" fill="#FFD700" fill-opacity="0.02" style="mix-blend-mode: overlay;"/>
                     </svg>
                 </div>
             </div>
